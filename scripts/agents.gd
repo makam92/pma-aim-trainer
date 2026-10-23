@@ -33,6 +33,8 @@ var agents := {T: [], CT: []}
 var weapons := {}
 ## file stem → where the weapon model goes on a hand's "wpn" bone (see _attach_transform)
 var weapon_attach := {}
+## file stem → the end of the barrel on that bone, for muzzle flashes (see _muzzle)
+var weapon_muzzle := {}
 ## First person (imported into user://viewmodel): CS2's viewmodel arms as a
 ## template, and the AK's first-person clips by name ("draw", "idle", "shoot"), whose tracks still
 ## point at the clip's own skeletons. Null and empty without the export.
@@ -82,6 +84,7 @@ func load_all() -> void:
 			_prepare_weapon(scene)
 			weapons[stem] = scene
 			weapon_attach[stem] = _attach_transform(scene)
+			weapon_muzzle[stem] = _muzzle(scene, weapon_attach[stem])
 		else:
 			scene.free()
 	_load_viewmodel()
@@ -125,6 +128,7 @@ func unload() -> void:
 		(weapons[stem] as Node).free()
 	weapons.clear()
 	weapon_attach.clear()
+	weapon_muzzle.clear()
 	if viewmodel_arms:
 		viewmodel_arms.free()
 		viewmodel_arms = null
@@ -152,7 +156,7 @@ func pick(team: int) -> Dictionary:
 func instance(agent: Dictionary, team: int, weapon_kind: String) -> Node3D:
 	var model: Node3D = (agent["template"] as Node3D).duplicate()
 	var skeleton := find_skeleton(model)
-	var file: String = WEAPON_FILES.get(weapon_kind, {}).get(team, "")
+	var file := weapon_file(weapon_kind, team)
 	if skeleton and weapons.has(file):
 		var attach := BoneAttachment3D.new()
 		attach.bone_name = "wpn"
@@ -177,6 +181,33 @@ static func _attach_transform(scene: Node3D) -> Transform3D:
 		to_scene = (node as Node3D).transform * to_scene
 		node = node.get_parent()
 	return to_scene.affine_inverse()
+
+
+## The weapon model an agent of the team holds for a weapon kind ("knife" or "rifle").
+static func weapon_file(weapon_kind: String, team: int) -> String:
+	return WEAPON_FILES.get(weapon_kind, {}).get(team, "")
+
+
+## The end of a weapon's barrel on the hand's "wpn" bone, which points along the barrel (+X): the
+## model's front-most vertex there.
+static func _muzzle(scene: Node3D, attach: Transform3D) -> Vector3:
+	var front := Vector3.ZERO
+	var best := -INF
+	for node in scene.find_children("*", "MeshInstance3D", true, false):
+		var to_scene := (node as Node3D).transform
+		var parent := node.get_parent()
+		while parent != scene:
+			to_scene = (parent as Node3D).transform * to_scene
+			parent = parent.get_parent()
+		var to_bone := attach * to_scene
+		var mesh: Mesh = (node as MeshInstance3D).mesh
+		for s in mesh.get_surface_count():
+			for v: Vector3 in mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]:
+				var p := to_bone * v
+				if p.x > best:
+					best = p.x
+					front = p
+	return front
 
 
 static func find_skeleton(model: Node) -> Skeleton3D:

@@ -10,6 +10,7 @@ const OFFSET := Vector3(1.0, 1.0, -1.0)
 const FLASH_SECONDS := 0.045
 
 var _viewport: SubViewport
+var _view: TextureRect
 var _camera: Camera3D
 var _rig: Node3D
 var _player: AnimationPlayer
@@ -30,20 +31,20 @@ func _ready() -> void:
 	_viewport.msaa_3d = Viewport.MSAA_2X
 	_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	add_child(_viewport)
-	var view := TextureRect.new()
-	view.texture = _viewport.get_texture()
-	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	view.stretch_mode = TextureRect.STRETCH_SCALE
-	view.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(view)
+	_view = TextureRect.new()
+	_view.texture = _viewport.get_texture()
+	_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_view.stretch_mode = TextureRect.STRETCH_SCALE
+	_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_view)
 	_build_stage()
-	get_viewport().size_changed.connect(_resize)
 	Settings.changed.connect(_apply_settings)
 	# Built when the CS2 files have loaded, and again after they're imported anew.
 	Agents.loaded.connect(_build_rig)
 	if Agents.is_loaded:
 		_build_rig()
-	_resize()
 	visible = false
 
 
@@ -79,12 +80,18 @@ func fire() -> void:
 	_flash_frames = 2
 
 
-## Where the AK's muzzle shows on screen, in the game view's coordinates, or null without the AK.
+## Rendered at the game view's size and scaled up the same way, so at a lower resolution the AK is
+## stretched like the rest of the game, as in CS2.
+func set_view_size(size_px: Vector2i, keep_aspect: bool) -> void:
+	_viewport.size = size_px
+	_view.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED if keep_aspect else TextureRect.STRETCH_SCALE
+
+
+## Where the AK's muzzle shows on screen, in the game view's pixels, or null without the AK.
 func muzzle_on_screen() -> Variant:
 	if not visible or _tip == null:
 		return null
-	var pixel := _camera.unproject_position(_tip.global_position)
-	return pixel * get_viewport().get_visible_rect().size / Vector2(_viewport.size)
+	return _camera.unproject_position(_tip.global_position)
 
 
 func _process(delta: float) -> void:
@@ -102,10 +109,6 @@ func _apply_settings() -> void:
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if visible else SubViewport.UPDATE_DISABLED
 	# viewmodel_fov is horizontal at 4:3, like CS2's main FOV; wider screens see more at the sides.
 	_camera.fov = rad_to_deg(2.0 * atan(tan(deg_to_rad(Settings.viewmodel_fov) / 2.0) * 0.75))
-
-
-func _resize() -> void:
-	_viewport.size = get_viewport().get_texture().get_size()
 
 
 ## Camera and light. The arms point along +Z with the eye at the origin, as CS2 exports them.

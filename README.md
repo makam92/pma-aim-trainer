@@ -19,6 +19,12 @@ Alla lägen körs i 60 sekunder.
 - **Tracking Confirmation**: döda strafeande CS2-gubbar en i taget, på nya platser och avstånd.
   Bara en kill tar fram nästa gubbe; missar och kroppsträffar (när du siktar på huvudet) sänker
   träffsäkerheten.
+- **Aim Punch**: dueller där fienden skjuter först. Varje träff rycker siktet uppåt (aim punch) och
+  kulorna går ännu högre tills rycket släppt; hitta tillbaka till huvudet och döda honom innan han
+  dödar dig (3 träffar utan kevlar, 4 med). Kevlar ger mycket mindre ryck. Visar hur ofta skotten
+  direkt efter en träff dödar jämfört med resten.
+- **Strafe Aim**: strafea med A/D och CS2-rörelse och träffa målen medan du rör dig. Skott räknas
+  bara när du har minst halva maxfarten, så stillastående skott och vändningarna i ADAD räknas inte.
 - **Counter-strafe**: strafea, kontra och skjut. Varje skott får en tidslinje som visar när du blev
   träffsäker (under 34 % av vapnets maxfart) och om skottet kom för tidigt eller sent.
 
@@ -29,7 +35,7 @@ Gubbarna i Tracking och Tracking Confirmation croucher ibland, som i CS2: oftast
 ibland mitt i ADAD. Crouchade går de i 34 % av maxfarten (85 u/s med kniv) och huvudet sjunker
 17 units. Det går att stänga av under Inställningar → Gubbar.
 
-**Dagens pass** kör som standard alla sju lägena tre gånger var (cirka 25 minuter). Med **Ändra**
+**Dagens pass** kör som standard alla nio lägena tre gånger var (cirka 32 minuter). Med **Ändra**
 väljer du själv hur många rundor av varje övning (0–5) och i vilken ordning. Trycker du Esc under
 passet visas hela passet bredvid pausmenyn, och du kan hoppa till vilken runda som helst. Efteråt
 visas en sammanfattning mot förra passet och hur många dagar i rad du tränat. **Statistik** har en
@@ -70,8 +76,9 @@ installern. Från projektet tas det från `%LOCALAPPDATA%\Programs\Source2Viewer
 ## Upplösning
 
 Under Inställningar finns upplösning (t.ex. 1280x1024) och skalning (utsträckt eller svarta kanter).
-Spelet renderas då i den upplösningen med CS2:s FOV för bildformatet och skalas upp till skärmen,
-som CS2 i helskärm.
+Spelet och AK:n renderas då i den upplösningen med CS2:s FOV för bildformatet och skalas upp mjukt
+till skärmen, som när grafikkortet skalar CS2. Hårkors, HUD och menyer ritas i skärmens egen
+upplösning: hårkorset sträcks ut som i CS2 men läggs på hela pixlar, lika på båda sidor.
 
 ## Installer
 

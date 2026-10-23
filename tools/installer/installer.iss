@@ -4,7 +4,7 @@
 ; stats and imported CS2 files live in %APPDATA%\CS2AimTrainer and stay when uninstalling.
 
 #define AppName "PMA Aim Trainer"
-#define AppVersion "1.0.0"
+#define AppVersion "1.1.0"
 #define Root "..\.."
 #ifndef Source2Viewer
   #error Pass /DSource2Viewer=<folder with Source2Viewer-CLI.exe>

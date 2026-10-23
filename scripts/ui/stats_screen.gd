@@ -9,7 +9,8 @@ const Defs = preload("res://scripts/defs.gd")
 const ProgressChart = preload("res://scripts/ui/progress_chart.gd")
 const TABS := [
 	["grid", "Gridshot"], ["flick", "Flicks"], ["micro", "Micro Adjustments"], ["track", "Tracking"], ["confirm", "Target Confirmation"],
-	["tconfirm", "Tracking Confirmation"], ["strafe", "Counter-strafe"], ["playlist", "Dagens pass"],
+	["tconfirm", "Tracking Confirmation"], ["punch", "Aim Punch"], ["strafeaim", "Strafe Aim"], ["strafe", "Counter-strafe"],
+	["playlist", "Dagens pass"],
 ]
 const MONTHS := ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
 const WEEKDAYS := ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
@@ -30,15 +31,18 @@ func _ready() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(1240, 0)
+	panel.custom_minimum_size = Vector2(1520, 0)
 	center.add_child(panel)
 	var col := UI.vbox(16)
 	panel.add_child(col)
 	col.add_child(UI.label("STATISTIK", 28, UI.TEXT, true))
-	var tabs := UI.hbox(8)
+	var tabs := HFlowContainer.new()
+	tabs.add_theme_constant_override("h_separation", 8)
+	tabs.add_theme_constant_override("v_separation", 8)
 	for tab: Array in TABS:
 		var id: String = tab[0]
 		var b := UI.button(tab[1], func() -> void: show_tab(id))
+		b.add_theme_font_size_override("font_size", 16)
 		_tab_buttons[id] = b
 		tabs.add_child(b)
 	col.add_child(tabs)
@@ -219,10 +223,7 @@ func _fact(title: String, value: String, color: Color) -> Control:
 
 func _style_tab(b: Button, selected: bool) -> void:
 	for state: String in TAB_STATES:
-		if selected:
-			b.add_theme_stylebox_override(state, UI.box(UI.ACCENT, 8, UI.NONE, 18, 9))
-		else:
-			b.remove_theme_stylebox_override(state)
+		b.add_theme_stylebox_override(state, UI.box(UI.ACCENT, 8, UI.NONE, 14, 8) if selected else UI.button_box(state, 14, 8))
 	for item: String in TAB_FONTS:
 		if selected:
 			b.add_theme_color_override(item, Color(0.09, 0.07, 0.03))

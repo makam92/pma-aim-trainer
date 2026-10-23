@@ -24,6 +24,13 @@ const BODY := [
 ## Where the head and a body capsule overlap, the head counts unless the body part is this much
 ## closer (meters), like an arm clearly in front of the face. Only for the approximate capsules.
 const HEAD_PRIORITY := 0.1
+## The simple figure's rifle ends here.
+const SIMPLE_MUZZLE := Vector3(0.02, 1.12, 0.62)
+## A muzzle flash is at least this wide (meters), and grows with distance to stay this many degrees
+## wide. It lasts this long.
+const FLASH_SIZE := 0.25
+const FLASH_DEG := 0.7
+const FLASH_SECONDS := 0.05
 ## CS2 agent without exported hitboxes: body capsules between bones, as [from bone, to bone, radius].
 ## The neck is thin and ends below the head.
 const BONE_CAPSULES := [
@@ -56,6 +63,14 @@ var _tree: AnimationTree
 var _has_crouch := false
 var _head_node: Node3D
 var _bones := {}
+var _weapon_mount: BoneAttachment3D
+var _muzzle := Vector3.ZERO      # on the weapon mount's bone
+var _flash: MeshInstance3D
+var _flash_light: OmniLight3D
+var _flash_left := 0.0
+var _flash_drawn := 0            # frames drawn when the flash came on
+
+static var _flash_material: StandardMaterial3D
 
 
 func _ready() -> void:
@@ -63,6 +78,15 @@ func _ready() -> void:
 		_build_agent()
 	else:
 		_build_simple()
+
+
+func _process(delta: float) -> void:
+	# A muzzle flash lasts FLASH_SECONDS, but is always drawn at least twice, also at low frame rates.
+	if _flash and _flash.visible:
+		_flash_left -= delta
+		if _flash_left <= 0.0 and Engine.get_frames_drawn() - _flash_drawn >= 2:
+			_flash.visible = false
+			_flash_light.visible = false
 
 
 func head_centre() -> Vector3:
@@ -167,6 +191,60 @@ func flash(part: String) -> void:
 		create_tween().tween_property(mat, "emission_energy_multiplier", 0.0, 0.25)
 
 
+## The end of the agent's gun barrel, in the world.
+func muzzle_position() -> Vector3:
+	if _weapon_mount:
+		return _weapon_mount.global_transform * _muzzle
+	return to_global(SIMPLE_MUZZLE)
+
+
+## A muzzle flash at the end of the gun for a moment, as when the agent fires, lighting it up.
+func muzzle_flash() -> void:
+	if _flash == null:
+		_flash = MeshInstance3D.new()
+		_flash.mesh = QuadMesh.new()
+		_flash.material_override = _flash_look()
+		_flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(_flash)
+		_flash_light = OmniLight3D.new()
+		_flash_light.light_color = Color(1.0, 0.72, 0.4)
+		_flash_light.light_energy = 2.5
+		_flash_light.omni_range = 2.0
+		add_child(_flash_light)
+	var at := muzzle_position()
+	var size := FLASH_SIZE
+	var camera := get_viewport().get_camera_3d()
+	if camera:
+		size = maxf(size, camera.global_position.distance_to(at) * tan(deg_to_rad(FLASH_DEG)))
+	(_flash.mesh as QuadMesh).size = Vector2(size, size)
+	_flash.global_position = at
+	_flash_light.global_position = at
+	_flash.visible = true
+	_flash_light.visible = true
+	_flash_left = FLASH_SECONDS
+	_flash_drawn = Engine.get_frames_drawn()
+
+
+## A round glow, white-hot in the middle and orange at the edge, always facing the camera.
+static func _flash_look() -> StandardMaterial3D:
+	if _flash_material == null:
+		var gradient := Gradient.new()
+		gradient.set_color(0, Color(1.0, 0.96, 0.8, 1.0))
+		gradient.set_color(1, Color(1.0, 0.5, 0.12, 0.0))
+		var texture := GradientTexture2D.new()
+		texture.gradient = gradient
+		texture.fill = GradientTexture2D.FILL_RADIAL
+		texture.fill_from = Vector2(0.5, 0.5)
+		texture.fill_to = Vector2(1.0, 0.5)
+		_flash_material = StandardMaterial3D.new()
+		_flash_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_flash_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_flash_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_flash_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		_flash_material.albedo_texture = texture
+	return _flash_material
+
+
 ## Lights up the part the crosshair is on, for tracking. Pass "" to clear.
 func glow(part: String) -> void:
 	if part == _glow:
@@ -189,8 +267,11 @@ func _build_agent() -> void:
 	for bone_name in ["head_0"] + BONE_CAPSULES.map(func(c: Array) -> String: return c[0]) + BONE_CAPSULES.map(func(c: Array) -> String: return c[1]):
 		_bones[bone_name] = _skeleton.find_bone(bone_name)
 	# Own copies of the materials, so flashes and glow only affect this agent (and not its weapon).
-	var weapon_meshes := model.find_children("*", "BoneAttachment3D", true, false).map(
-		func(a: Node) -> Array: return a.find_children("*", "MeshInstance3D", true, false))
+	var mounts := model.find_children("*", "BoneAttachment3D", true, false)
+	var weapon_meshes := mounts.map(func(a: Node) -> Array: return a.find_children("*", "MeshInstance3D", true, false))
+	if not mounts.is_empty():
+		_weapon_mount = mounts[0]
+		_muzzle = Agents.weapon_muzzle.get(Agents.weapon_file(weapon_kind, team), Vector3.ZERO)
 	for node in model.find_children("*", "MeshInstance3D", true, false):
 		if weapon_meshes.any(func(list: Array) -> bool: return list.has(node)):
 			continue

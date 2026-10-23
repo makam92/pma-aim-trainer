@@ -124,8 +124,8 @@ func message(text: String, color: Color = UI.TEXT) -> void:
 
 
 ## Briefly tints the whole screen.
-func tint(color: Color) -> void:
-	_tint.color = Color(color, 0.22)
+func tint(color: Color, strength: float = 0.22) -> void:
+	_tint.color = Color(color, strength)
 	if _tint_tween:
 		_tint_tween.kill()
 	_tint_tween = create_tween()

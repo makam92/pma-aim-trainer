@@ -11,8 +11,9 @@ signal quit_requested
 const UI = preload("res://scripts/ui/ui_kit.gd")
 const Defs = preload("res://scripts/defs.gd")
 
-const CARD_WIDTH := 400.0
-const CARD_PADDING := 22.0
+const COLUMNS := 5
+const CARD_WIDTH := 344.0
+const CARD_PADDING := 20.0
 ## In the order of the standard playlist.
 const CARDS := [
 	{
@@ -46,6 +47,16 @@ const CARDS := [
 		"text": "Döda strafeande CS2-gubbar en i taget med riktig CS2-rörelse. En kill tar fram nästa, missar sänker träffsäkerheten.",
 	},
 	{
+		"id": "punch",
+		"title": "Aim Punch",
+		"text": "Fienden skjuter först och varje träff rycker siktet som i CS2. Hitta tillbaka till huvudet och döda honom innan han dödar dig.",
+	},
+	{
+		"id": "strafeaim",
+		"title": "Strafe Aim",
+		"text": "Strafea med A/D och träffa målen medan du rör dig. Skott när du står still eller vänder räknas inte.",
+	},
+	{
 		"id": "strafe",
 		"title": "Counter-strafe",
 		"text": "Strafea med A/D, kontra och skjut. Du ser direkt om skottet var träffsäkert och hur många ms fel du låg.",
@@ -73,13 +84,13 @@ func _ready() -> void:
 	var title := UI.label("PMA AIM TRAINER", 56, UI.TEXT, true)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_child(title)
-	var sub := UI.label("Sju övningar på 60 sekunder med CS2:s sens, FOV, rörelse och modeller", 18, UI.DIM)
+	var sub := UI.label("Nio övningar på 60 sekunder med CS2:s sens, FOV, rörelse och modeller", 18, UI.DIM)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_child(sub)
 	col.add_child(head)
 
 	var cards := GridContainer.new()
-	cards.columns = 4
+	cards.columns = COLUMNS
 	cards.add_theme_constant_override("h_separation", 16)
 	cards.add_theme_constant_override("v_separation", 16)
 	cards.add_child(_playlist_card())
@@ -170,17 +181,19 @@ func _card(card: Dictionary) -> Control:
 
 	var grid := GridContainer.new()
 	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 6)
 	for option: Array in _options_for(id):
 		var l := UI.label(option[0], 14, UI.DIM)
-		l.custom_minimum_size = Vector2(100, 0)
+		l.custom_minimum_size = Vector2(78, 0)
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		grid.add_child(l)
 		var key: String = option[2]
 		var choice := UI.options(option[1], Settings.get(key), func(i: int) -> void: Settings.update(key, i))
-		choice.custom_minimum_size = Vector2(220, 0)
-		choice.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		choice.add_theme_font_size_override("font_size", 15)
+		for state: String in UI.BUTTON_STATES:
+			choice.add_theme_stylebox_override(state, UI.button_box(state, 12.0, 7.0))
+		choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(choice)
 	v.add_child(grid)
 
@@ -244,6 +257,18 @@ func _options_for(id: String) -> Array:
 				["Fart", speeds, "tconf_speed"],
 				["Avstånd", ranges, "tconf_range"],
 				["Sikta på", zones, "tconf_zone"],
+			]
+		"punch":
+			return [
+				["Skydd", Defs.ARMOR, "punch_armor"],
+				["Avstånd", ranges, "punch_range"],
+				["Sikta på", zones, "punch_zone"],
+			]
+		"strafeaim":
+			return [
+				["Måltyp", Defs.TARGET_TYPES, "saim_target"],
+				["Avstånd", ranges, "saim_range"],
+				["Din fart", speeds, "saim_speed"],
 			]
 		"strafe":
 			return [

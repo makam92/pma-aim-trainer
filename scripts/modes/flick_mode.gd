@@ -135,8 +135,8 @@ func _set_phase(p: Phase) -> void:
 
 
 func _spawn() -> void:
-	# Keep targets on screen: at 16:9 CS2 shows about 53° to each side.
-	var screen := get_viewport().get_visible_rect().size
+	# Keep targets on screen: at 16:9 CS2 shows about 53° to each side, at 5:4 about 43°.
+	var screen := Vector2(main.game_view.size)
 	var half_fov := rad_to_deg(atan(tan(deg_to_rad(Defs.CS_VFOV / 2.0)) * screen.x / screen.y))
 	var max_yaw := minf(YAW_RANGE.y, half_fov - 5.0)
 	var yaw := randf_range(YAW_RANGE.x, max_yaw) * (1.0 if randf() < 0.5 else -1.0)

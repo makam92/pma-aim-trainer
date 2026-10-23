@@ -48,3 +48,24 @@ static func average(items: Array, key: String = "") -> Variant:
 	for item: Variant in items:
 		sum += float(item[key] if key != "" else item)
 	return sum / items.size()
+
+
+## Seconds in milliseconds, keeping null.
+static func to_ms(seconds: Variant) -> Variant:
+	return null if seconds == null else float(seconds) * 1000.0
+
+
+## Lines on the floor along both edges of the lane you strafe in, `half_width` meters to each side.
+func add_lane(half_width: float) -> void:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(UI.ACCENT, 0.7)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	for x: float in [-half_width, half_width]:
+		var line := BoxMesh.new()
+		line.size = Vector3(0.05, 0.01, 4.0)
+		var inst := MeshInstance3D.new()
+		inst.mesh = line
+		inst.material_override = mat
+		inst.position = Vector3(x, 0.006, 0.0)
+		add_child(inst)

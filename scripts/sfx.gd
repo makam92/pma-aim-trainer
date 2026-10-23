@@ -5,9 +5,12 @@ extends Node
 const RATE := 44100
 const AK_DIR := "user://sounds/sounds/weapons/ak47"
 const AK_VOLUME_DB := -9.0
+## An enemy's AK, further away than your own.
+const ENEMY_VOLUME_DB := -17.0
 
 var _players := {}
 var _ak: Array[AudioStreamPlayer] = []
+var _ak_enemy: Array[AudioStreamPlayer] = []
 var _ak_last := -1
 
 
@@ -20,40 +23,51 @@ func _ready() -> void:
 	_add("fail", _tone(440.0, 110.0, 0.38, 0.4, 0.35))
 	_add("start", _tone(880.0, 1320.0, 0.07, 0.3, 0.0))
 	_add("done", _arpeggio([880.0, 1108.7, 1318.5, 1760.0], 0.075, 0.32))
+	_add("hurt", _thud())
+	_add("enemy", _shot())
+	_players["enemy"].volume_db = -7.0
 	load_ak_sound()
 
 
 ## Reads CS2's AK recordings, if they've been imported. CS2 picks one of four per shot; the tails of
 ## quick shots overlap.
 func load_ak_sound() -> void:
-	for p in _ak:
+	for p in _ak + _ak_enemy:
 		p.queue_free()
 	_ak.clear()
+	_ak_enemy.clear()
 	for n in range(1, 5):
 		var path := ProjectSettings.globalize_path(AK_DIR.path_join("ak47_0%d.wav" % n))
 		var wav := AudioStreamWAV.load_from_file(path) if FileAccess.file_exists(path) else null
 		if wav:
-			var p := AudioStreamPlayer.new()
-			p.stream = wav
-			p.max_polyphony = 3
-			p.volume_db = AK_VOLUME_DB
-			add_child(p)
-			_ak.append(p)
+			_ak.append(_ak_player(wav, AK_VOLUME_DB))
+			_ak_enemy.append(_ak_player(wav, ENEMY_VOLUME_DB))
+
+
+func _ak_player(wav: AudioStreamWAV, volume_db: float) -> AudioStreamPlayer:
+	var p := AudioStreamPlayer.new()
+	p.stream = wav
+	p.max_polyphony = 3
+	p.volume_db = volume_db
+	add_child(p)
+	return p
 
 
 func has_ak_sound() -> bool:
 	return not _ak.is_empty()
 
 
+## "shot" is your own gun and "enemy" an enemy's AK: CS2's AK recordings when imported and turned on.
 func play(sound: String, pitch: float = 1.0) -> void:
 	# Looked up at runtime so this script also compiles in tests, where there are no autoloads.
 	var settings := get_node_or_null("/root/Settings")
-	if sound == "shot" and has_ak_sound() and settings and settings.ak_sound:
-		var pick := randi() % _ak.size()
-		if pick == _ak_last and _ak.size() > 1:
-			pick = (pick + 1) % _ak.size()
+	if (sound == "shot" or sound == "enemy") and has_ak_sound() and settings and settings.ak_sound:
+		var players: Array[AudioStreamPlayer] = _ak if sound == "shot" else _ak_enemy
+		var pick := randi() % players.size()
+		if pick == _ak_last and players.size() > 1:
+			pick = (pick + 1) % players.size()
 		_ak_last = pick
-		_ak[pick].play()
+		players[pick].play()
 		return
 	var p: AudioStreamPlayer = _players.get(sound)
 	if p:
@@ -134,6 +148,23 @@ func _shot() -> AudioStreamWAV:
 		noise = lerpf(noise, rng.randf_range(-1.0, 1.0), 0.3)
 		var thump := sin(TAU * 70.0 * i / RATE) * exp(-14.0 * x)
 		s[i] = (noise * exp(-10.0 * x) * 0.9 + thump * 0.7) * 0.22
+	return _wav(s)
+
+
+## A dull thud for taking a hit: a deep falling thump with a short burst of muffled noise.
+func _thud() -> AudioStreamWAV:
+	var n := int(0.16 * RATE)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 99
+	var noise := 0.0
+	var phase := 0.0
+	for i in n:
+		var x := float(i) / n
+		phase += TAU * lerpf(110.0, 50.0, x) / RATE
+		noise = lerpf(noise, rng.randf_range(-1.0, 1.0), 0.06)
+		s[i] = (sin(phase) * exp(-8.0 * x) + noise * exp(-16.0 * x) * 2.0) * minf(1.0, i / (0.002 * RATE)) * 0.42
 	return _wav(s)
 
 

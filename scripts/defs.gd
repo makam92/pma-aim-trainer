@@ -18,7 +18,7 @@ const TARGET_TYPES := ["CS2-huvud", "Klot"]
 const RUN_SECONDS := 60.0
 ## The standard daily playlist: every mode PLAYLIST_REPS times in a row, in this order (Gridshot
 ## warms up). Settings.playlist holds the player's own rounds and order.
-const PLAYLIST := ["grid", "flick", "micro", "track", "confirm", "tconfirm", "strafe"]
+const PLAYLIST := ["grid", "flick", "micro", "track", "confirm", "tconfirm", "punch", "strafeaim", "strafe"]
 const PLAYLIST_REPS := 3
 const PLAYLIST_MAX_REPS := 5
 ## Targets never come lower than this above the floor (meters), however far away they are.
@@ -63,11 +63,13 @@ const TRACK_SPEEDS := [
 ]
 const TRACK_DISTS := [400.0, 800.0, 1500.0]   # CS2 units, like distances on real maps
 const TRACK_ZONES := [{"id": "head", "name": "Huvud"}, {"id": "body", "name": "Hela kroppen"}]
+## Aim Punch: whether you wear kevlar when the enemy hits you.
+const ARMOR := ["Utan kevlar", "Med kevlar"]
 
 
 ## Modes where the AK's recoil and inaccuracy change where shots land (Counter-strafe has its own
-## weapons, and tracking doesn't shoot).
-const RECOIL_MODES := ["grid", "flick", "micro", "confirm", "tconfirm"]
+## weapons, tracking doesn't shoot, and Strafe Aim is about aiming while you move).
+const RECOIL_MODES := ["grid", "flick", "micro", "confirm", "tconfirm", "punch"]
 
 
 ## The options a run used, so personal bests only compare runs with the same settings.
@@ -97,6 +99,13 @@ static func _options_text(mode: String, s: Object) -> String:
 			var bot: Dictionary = TRACK_SPEEDS[s.tconf_speed]
 			return "%s %d u/s · %s · %s · 60 s" % [bot["name"], bot["speed"], TARGET_RANGES[s.tconf_range]["name"],
 				str(TRACK_ZONES[s.tconf_zone]["name"]).to_lower()] + (" · crouch" if s.bot_crouch else "")
+		"punch":
+			return "%s · %s · %s · 60 s" % [ARMOR[s.punch_armor], TARGET_RANGES[s.punch_range]["name"],
+				str(TRACK_ZONES[s.punch_zone]["name"]).to_lower()]
+		"strafeaim":
+			var own: Dictionary = TRACK_SPEEDS[s.saim_speed]
+			return "%s · %s · %s %d u/s · 60 s" % [TARGET_TYPES[s.saim_target], TARGET_RANGES[s.saim_range]["name"],
+				own["name"], own["speed"]]
 		"track":
 			var speed: Dictionary = TRACK_SPEEDS[s.track_speed]
 			return "%s %d u/s · %d u · 60 s · %s" % [speed["name"], speed["speed"], TRACK_DISTS[s.track_dist],

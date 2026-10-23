@@ -1,6 +1,6 @@
 extends Control
 ## Live speed bar. In counter-strafe it marks the accuracy threshold; for a tracking bot it just
-## shows how fast the bot is moving.
+## shows how fast the bot is moving; in Strafe Aim it marks the speed shots need to count.
 
 const UI = preload("res://scripts/ui/ui_kit.gd")
 
@@ -8,6 +8,8 @@ var sim: RefCounted
 var speed := 0.0
 var title := "Fart"
 var neutral := false
+## When set, you need to be at or above this speed (green above the mark instead of below it).
+var min_speed := 0.0
 
 
 func _init() -> void:
@@ -21,11 +23,12 @@ func _draw() -> void:
 		return
 	var font := get_theme_default_font()
 	var max_speed: float = sim.max_speed
-	var thr: float = sim.threshold()
+	var thr: float = min_speed if min_speed > 0.0 else sim.threshold()
 	var bar := Rect2(130.0, 12.0, size.x - (330.0 if neutral else 260.0), 16.0)
 	draw_string(font, Vector2(16.0, 26.0), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, UI.DIM)
 	draw_rect(bar, Color(1, 1, 1, 0.08))
-	var color := UI.ACCENT if neutral else (UI.GOOD if speed <= thr else UI.BAD)
+	var ok := speed >= thr if min_speed > 0.0 else speed <= thr
+	var color := UI.ACCENT if neutral else (UI.GOOD if ok else UI.BAD)
 	draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(speed / max_speed, 0.0, 1.0), bar.size.y)), color)
 	if not neutral:
 		var tx := bar.position.x + bar.size.x * thr / max_speed

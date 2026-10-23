@@ -14,13 +14,14 @@ const CROSSHAIR_COLORS := [
 	{"name": "Vit", "color": Color(1.0, 1.0, 1.0)},
 ]
 const FPS_CAPS := [144, 240, 360, 500, 1000, 0]
-## Render resolutions; (0, 0) means the screen's own. Others are scaled up to fill the screen,
-## stretched or with black bars, like running CS2 at that resolution.
+## Render resolutions; (0, 0) means the screen's own. With the others the game is rendered at that
+## size and scaled up to fill the screen, stretched or with black bars, like running CS2 at that
+## resolution (main.gd renders it; menus, HUD and crosshair stay at the screen's own resolution).
 const RESOLUTIONS := [
 	Vector2i(0, 0), Vector2i(1920, 1080), Vector2i(1680, 1050), Vector2i(1600, 900), Vector2i(1440, 1080),
 	Vector2i(1280, 1024), Vector2i(1280, 960), Vector2i(1024, 768), Vector2i(800, 600),
 ]
-## The UI is laid out for this size; smaller resolutions scale it down.
+## The UI is laid out for this size and scaled to the window.
 const UI_BASE := Vector2(1920.0, 1080.0)
 const SAVED := [
 	"sensitivity", "dpi",
@@ -35,6 +36,8 @@ const SAVED := [
 	"strafe_weapon",
 	"track_speed", "track_dist", "track_zone",
 	"tconf_speed", "tconf_range", "tconf_zone",
+	"punch_armor", "punch_range", "punch_zone",
+	"saim_target", "saim_range", "saim_speed",
 	"playlist",
 ]
 
@@ -84,6 +87,12 @@ var track_zone := 0
 var tconf_speed := 0
 var tconf_range := 1
 var tconf_zone := 0
+var punch_armor := 0
+var punch_range := 0
+var punch_zone := 0
+var saim_target := 0
+var saim_range := 1
+var saim_speed := 3
 ## Your own daily playlist as [mode id, rounds] pairs in play order; empty means the standard one.
 var playlist: Array = []
 
@@ -136,18 +145,28 @@ func apply() -> void:
 	changed.emit()
 
 
+## The window itself always draws at the screen's own resolution, so text and the crosshair stay
+## sharp; only the game view is rendered at render_size().
 func _apply_resolution() -> void:
 	var root := get_tree().root
-	var res: Vector2i = RESOLUTIONS[clampi(resolution, 0, RESOLUTIONS.size() - 1)]
-	if res == Vector2i.ZERO:
-		root.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
-		root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
-		root.content_scale_size = Vector2i(UI_BASE)
-	else:
-		# Render the whole game at this size and scale it to the window, as CS2 does.
-		root.content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
-		root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_IGNORE if stretched else Window.CONTENT_SCALE_ASPECT_KEEP
-		root.content_scale_size = res
+	root.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+	root.content_scale_size = Vector2i(UI_BASE)
+
+
+## The size the game is rendered at, or (0, 0) for the screen's own resolution.
+func render_size() -> Vector2i:
+	return RESOLUTIONS[clampi(resolution, 0, RESOLUTIONS.size() - 1)]
+
+
+## How much the game view is scaled up in a window of this size (pixels), horizontally and
+## vertically: 1 at the screen's own resolution, the same both ways with black bars.
+func view_stretch(window: Vector2) -> Vector2:
+	var res := Vector2(render_size())
+	if res == Vector2.ZERO or window.x <= 0.0 or window.y <= 0.0:
+		return Vector2.ONE
+	var s := window / res
+	return s if stretched else Vector2.ONE * minf(s.x, s.y)
 
 
 ## The daily playlist with every mode exactly once, in play order: [[mode id, rounds], ...].

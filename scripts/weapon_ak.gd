@@ -31,6 +31,8 @@ const DECAY_LIN := 18.0              # weapon_recoil_decay2_lin
 const VEL_DECAY := 4.5               # weapon_recoil_vel_decay
 const INDEX_DECAY := 2.0             # weapon_recoil_decay_coefficient
 const INDEX_DECAY_THRESHOLD := 1.1   # the index only decays once you stop firing
+## A hit from an enemy keeps pushing the punch on for a moment, at this many times its jump per second.
+const HIT_PUSH := 15.0
 const TABLE_SIZE := 64
 const TICK := 1.0 / 64.0
 
@@ -93,6 +95,22 @@ func fire(t: float) -> Dictionary:
 func view_punch(t: float) -> Vector2:
 	advance(t)
 	return punch * RECOIL_SCALE * VIEW_TRACKING
+
+
+## Where bullets go right now relative to where you aim, from the punch alone (pitch up, yaw left),
+## degrees: for shooting without the AK's own recoil and spread.
+func aim_punch(t: float) -> Vector2:
+	advance(t)
+	return punch * RECOIL_SCALE
+
+
+## A hit from an enemy punches your aim like CS2's aim punch: it jumps by `kick` (pitch up, yaw left,
+## degrees), is pushed on the same way for a moment, then settles like the recoil does. Bullets fired
+## right after the hit go high, twice as far as the punch.
+func take_hit(t: float, kick: Vector2) -> void:
+	advance(t)
+	punch += kick
+	punch_vel += kick * HIT_PUSH
 
 
 ## Runs the decays tick by tick up to time t.

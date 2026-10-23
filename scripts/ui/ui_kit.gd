@@ -228,9 +228,9 @@ static func short_value(mode: String, score: Variant) -> String:
 
 ## The headline number of a stored run, as shown in menus and lists.
 static func main_value(mode: String, r: Dictionary) -> String:
-	if mode in ["grid", "flick", "micro", "confirm"]:
+	if mode in ["grid", "flick", "micro", "confirm", "strafeaim"]:
 		return "%d träffar" % int(r.get("score", 0))
-	if mode == "tconfirm":
+	if mode in ["tconfirm", "punch"]:
 		return "%d kills" % int(r.get("score", 0))
 	if mode == "track":
 		return dec(float(r.get("score", 0)) / 100.0, 1) + " %"

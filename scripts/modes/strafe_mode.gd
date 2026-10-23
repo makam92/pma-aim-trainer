@@ -40,7 +40,7 @@ func begin() -> void:
 	dummy.team = randi() % 2
 	dummy.position = Vector3(0.0, 0.0, -DUMMY_DIST)
 	add_child(dummy)
-	_build_lane()
+	add_lane(LANE_HALF_WIDTH)
 	meter = SpeedMeter.new()
 	meter.sim = sim
 	hud.add_widget(meter)
@@ -298,19 +298,15 @@ func _finish() -> void:
 		"shots": shots.size(),
 		"accurate": accurate.size(),
 		"accuracy": float(accurate.size()) / maxi(shots.size(), 1),
-		"avg_delay_ms": _ms(average(delays, "delay")),
+		"avg_delay_ms": to_ms(average(delays, "delay")),
 		"early": early.size(),
-		"avg_early_ms": _ms(average(early, "early")),
+		"avg_early_ms": to_ms(average(early, "early")),
 		"moving": shots.filter(func(s: Dictionary) -> bool: return s["verdict"] == "moving" or s["verdict"] == "overcounter").size(),
-		"avg_stop_ms": _ms(average(stops, "stop")),
+		"avg_stop_ms": to_ms(average(stops, "stop")),
 		"counter_rate": float(shots.filter(func(s: Dictionary) -> bool: return s["counter"]).size()) / maxi(shots.size(), 1),
 		"overlaps": shots.filter(func(s: Dictionary) -> bool: return s["overlap"] > 0.015).size(),
 		"headshots": shots.filter(func(s: Dictionary) -> bool: return s.get("part", "") == "head").size(),
 	})
-
-
-func _ms(seconds: Variant) -> Variant:
-	return null if seconds == null else float(seconds) * 1000.0
 
 
 func _update_hud() -> void:
@@ -328,18 +324,3 @@ func _update_hud() -> void:
 	var stats := "%s s kvar · träffsäkra %d %% · %s p" % [UI.dec(left, 1), pct, UI.num(score)]
 	hud.set_texts(title, "Skott %d" % shots.size(), stats)
 	hud.set_progress(1.0 - left / duration)
-
-
-func _build_lane() -> void:
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(UI.ACCENT, 0.7)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	for x: float in [-LANE_HALF_WIDTH, LANE_HALF_WIDTH]:
-		var line := BoxMesh.new()
-		line.size = Vector3(0.05, 0.01, 4.0)
-		var inst := MeshInstance3D.new()
-		inst.mesh = line
-		inst.material_override = mat
-		inst.position = Vector3(x, 0.006, 0.0)
-		add_child(inst)
