@@ -613,8 +613,10 @@ func _self_test() -> void:
 	print("[självtest] rekyl av: %d skott när avtryckaren hålls in" % _shots_fired)
 	if _shots_fired != 1:
 		failures += 1
-	failures += await _punch_check()
-	failures += await _strafeaim_check()
+	# A check that stops on a script error returns nothing, and counts as failed.
+	for check: Callable in [_punch_check, _strafeaim_check, _tconfirm_lives_check, _tconfirm_mixed_check]:
+		var result: Variant = await check.call()
+		failures += 1 if result == null else int(result)
 	print("OK" if failures == 0 else "FEL: %d" % failures)
 	get_tree().quit(failures)
 
@@ -659,6 +661,57 @@ func _punch_check() -> int:
 			failures += 1
 	Settings.punch_armor = 0
 	return failures
+
+
+## Tracking Confirmation with lives. Hard: a kill counts, a shot that doesn't kill ends the attempt,
+## and after a short pause a new one starts from zero. 3 lives: two misses go on, the third ends it.
+func _tconfirm_lives_check() -> int:
+	Settings.tconf_lives = 2   # Hard
+	start_mode("tconfirm")
+	var eye: Vector3 = player.eye_position()
+	mode.shoot(eye, Vector3.FORWARD)   # the start target
+	await _wait(0.3)
+	var enemy: Node3D = mode.get("_dummy")
+	mode.shoot(eye, (enemy.call("head_centre") - eye).normalized())
+	var killed: bool = mode.get("kills") == 1
+	mode.shoot(eye, Vector3.UP)
+	var failed: bool = mode.get("phase") == 2   # FAILED
+	await _wait(1.1)
+	var restarted: bool = mode.get("phase") == 0 and mode.get("attempts") == 2 and mode.get("kills") == 0
+	Settings.tconf_lives = 1   # 3 lives
+	start_mode("tconfirm")
+	mode.shoot(eye, Vector3.FORWARD)
+	await _wait(0.1)
+	mode.shoot(eye, Vector3.UP)
+	mode.shoot(eye, Vector3.UP)
+	var two_ok: bool = mode.get("phase") == 1 and mode.get("lives_left") == 1 and mode.get("misses") == 2
+	mode.shoot(eye, Vector3.UP)
+	var third_out: bool = mode.get("phase") == 2
+	Settings.tconf_lives = 0
+	print("[självtest] tracking confirmation hard: kill räknas: %s, miss avslutar försöket: %s, nytt försök från noll: %s; 3 liv: två missar går bra: %s, den tredje börjar om: %s" % [
+		"ja" if killed else "NEJ", "ja" if failed else "NEJ", "ja" if restarted else "NEJ",
+		"ja" if two_ok else "NEJ", "ja" if third_out else "NEJ"])
+	return int(not (killed and failed and restarted and two_ok and third_out))
+
+
+## Tracking Confirmation with mixed speed: every new bot gets one of the CS2 speeds at random.
+func _tconfirm_mixed_check() -> int:
+	Settings.tconf_speed = Defs.TRACK_SPEEDS.size()
+	start_mode("tconfirm")
+	mode.shoot(player.eye_position(), Vector3.FORWARD)   # the start target
+	await get_tree().process_frame
+	var allowed := Defs.TRACK_SPEEDS.map(func(s: Dictionary) -> float: return s["speed"])
+	var seen := {}
+	for i in 12:
+		mode.call("_spawn_bot")
+		seen[mode.get("max_speed")] = true
+	await get_tree().process_frame
+	Settings.tconf_speed = 0
+	var all_cs2 := seen.keys().all(func(v: float) -> bool: return allowed.has(v))
+	print("[självtest] tracking confirmation blandad fart: %d olika farter på 12 gubbar (%s u/s), alla är CS2-farter: %s" % [
+		seen.size(), ", ".join(PackedStringArray(seen.keys().map(func(v: float) -> String: return str(int(v))))),
+		"ja" if all_cs2 else "NEJ"])
+	return int(seen.size() < 3 or not all_cs2)
 
 
 ## Strafe Aim: a shot on a target at full speed counts; one fired after stopping doesn't.
@@ -819,6 +872,23 @@ func _run_tour() -> void:
 	print("[tconfirm] kill på huvudet: %s" % (mode.get("kills") == 1))
 	mode.call("shoot", eye, Vector3.UP)
 	print("[tconfirm] miss utan omstart: %s" % (mode.get("misses") == 1 and mode.get("kills") == 1 and mode.get("phase") == 1))
+	# On Hard the same miss starts over.
+	Settings.tconf_lives = 2
+	start_mode("tconfirm")
+	mode.call("shoot", eye, Vector3.FORWARD)
+	await _wait(0.6)
+	mode.call("shoot", eye, Vector3.UP)
+	await _snap(dir, "16_tconfirm_hard_miss")
+	# With 3 lives the first miss only costs one.
+	Settings.tconf_lives = 1
+	start_mode("tconfirm")
+	mode.call("shoot", eye, Vector3.FORWARD)
+	await _wait(0.6)
+	mode.call("shoot", eye, Vector3.UP)
+	await _wait(0.1)
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(dir.path_join("16_tconfirm_3lives_miss.png"))
+	Settings.tconf_lives = 0
 	# The AK in first person: held, and the frame right after a shot.
 	start_mode("flick")
 	await _wait(1.4)

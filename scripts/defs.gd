@@ -61,10 +61,16 @@ const TRACK_SPEEDS := [
 	{"name": "AWP", "speed": 200.0},
 	{"name": "Gå (shift)", "speed": 130.0},
 ]
+## Tracking Confirmation can also mix them: after TRACK_SPEEDS comes this choice, where every bot
+## gets one of them at random.
+const MIXED_SPEED := "Blandad fart"
 const TRACK_DISTS := [400.0, 800.0, 1500.0]   # CS2 units, like distances on real maps
 const TRACK_ZONES := [{"id": "head", "name": "Huvud"}, {"id": "body", "name": "Hela kroppen"}]
 ## Aim Punch: whether you wear kevlar when the enemy hits you.
 const ARMOR := ["Utan kevlar", "Med kevlar"]
+## Tracking Confirmation: how many shots that don't kill you get before you start over from zero
+## (0: no limit, misses only lower your accuracy).
+const TCONF_LEVELS := [{"name": "Normal", "lives": 0}, {"name": "3 liv", "lives": 3}, {"name": "Hard", "lives": 1}]
 
 
 ## Modes where the AK's recoil and inaccuracy change where shots land (Counter-strafe has its own
@@ -96,9 +102,14 @@ static func _options_text(mode: String, s: Object) -> String:
 		"strafe":
 			return "%s · 60 s" % WEAPONS[s.strafe_weapon]["name"]
 		"tconfirm":
-			var bot: Dictionary = TRACK_SPEEDS[s.tconf_speed]
-			return "%s %d u/s · %s · %s · 60 s" % [bot["name"], bot["speed"], TARGET_RANGES[s.tconf_range]["name"],
-				str(TRACK_ZONES[s.tconf_zone]["name"]).to_lower()] + (" · crouch" if s.bot_crouch else "")
+			var speed_text := MIXED_SPEED
+			if s.tconf_speed < TRACK_SPEEDS.size():
+				var bot: Dictionary = TRACK_SPEEDS[s.tconf_speed]
+				speed_text = "%s %d u/s" % [bot["name"], bot["speed"]]
+			var level: Dictionary = TCONF_LEVELS[s.tconf_lives]
+			return "%s · %s · %s · 60 s" % [speed_text, TARGET_RANGES[s.tconf_range]["name"],
+				str(TRACK_ZONES[s.tconf_zone]["name"]).to_lower()] + (" · crouch" if s.bot_crouch else "") \
+				+ ("" if int(level["lives"]) == 0 else " · " + str(level["name"]).to_lower())
 		"punch":
 			return "%s · %s · %s · 60 s" % [ARMOR[s.punch_armor], TARGET_RANGES[s.punch_range]["name"],
 				str(TRACK_ZONES[s.punch_zone]["name"]).to_lower()]

@@ -16,9 +16,12 @@ Alla lägen körs i 60 sekunder.
 - **Tracking**: följ en gubbe som strafear med riktig CS2-rörelse (ADAD, counter-strafes, upp till
   250 u/s). Mäter tid på huvud och kropp, även direkt efter riktningsbyten.
 - **Target Confirmation**: så många huvuden du hinner, en miss och du börjar om från noll.
-- **Tracking Confirmation**: döda strafeande CS2-gubbar en i taget, på nya platser och avstånd.
+- **Tracking Confirmation**: döda strafeande CS2-gubbar en i taget, på nya platser och avstånd,
+  med en fast fart eller Blandad fart (varje gubbe får en slumpad CS2-fart, från shift-gång till kniv).
   Bara en kill tar fram nästa gubbe; missar och kroppsträffar (när du siktar på huvudet) sänker
-  träffsäkerheten.
+  träffsäkerheten. Med **3 liv** kostar varje skott som inte dödar (miss, eller kroppsträff när du
+  siktar på huvudet) ett liv, och när de är slut börjar du om från noll, som i Target Confirmation.
+  På **Hard** har du bara ett.
 - **Aim Punch**: dueller där fienden skjuter först. Varje träff rycker siktet uppåt (aim punch) och
   kulorna går ännu högre tills rycket släppt; hitta tillbaka till huvudet och döda honom innan han
   dödar dig (3 träffar utan kevlar, 4 med). Kevlar ger mycket mindre ryck. Visar hur ofta skotten

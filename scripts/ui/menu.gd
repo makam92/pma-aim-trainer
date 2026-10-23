@@ -44,7 +44,7 @@ const CARDS := [
 	{
 		"id": "tconfirm",
 		"title": "Tracking Confirmation",
-		"text": "Döda strafeande CS2-gubbar en i taget med riktig CS2-rörelse. En kill tar fram nästa, missar sänker träffsäkerheten.",
+		"text": "Döda strafeande CS2-gubbar en i taget med riktig CS2-rörelse. En kill tar fram nästa. Med 3 liv eller Hard börjar du om när liven är slut.",
 	},
 	{
 		"id": "punch",
@@ -254,9 +254,10 @@ func _options_for(id: String) -> Array:
 			]
 		"tconfirm":
 			return [
-				["Fart", speeds, "tconf_speed"],
+				["Fart", speeds + [Defs.MIXED_SPEED], "tconf_speed"],
 				["Avstånd", ranges, "tconf_range"],
 				["Sikta på", zones, "tconf_zone"],
+				["Läge", Defs.TCONF_LEVELS.map(func(l: Dictionary) -> String: return l["name"]), "tconf_lives"],
 			]
 		"punch":
 			return [

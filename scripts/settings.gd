@@ -35,7 +35,7 @@ const SAVED := [
 	"confirm_target", "confirm_range", "confirm_limit",
 	"strafe_weapon",
 	"track_speed", "track_dist", "track_zone",
-	"tconf_speed", "tconf_range", "tconf_zone",
+	"tconf_speed", "tconf_range", "tconf_zone", "tconf_lives",
 	"punch_armor", "punch_range", "punch_zone",
 	"saim_target", "saim_range", "saim_speed",
 	"playlist",
@@ -87,6 +87,7 @@ var track_zone := 0
 var tconf_speed := 0
 var tconf_range := 1
 var tconf_zone := 0
+var tconf_lives := 0
 var punch_armor := 0
 var punch_range := 0
 var punch_zone := 0
@@ -108,6 +109,8 @@ func _ready() -> void:
 			dev_mode = true
 	if not dev_mode:
 		_load()
+	else:
+		AudioServer.set_bus_mute(0, true)   # tests and the screenshot tour run silently
 	apply()
 
 
