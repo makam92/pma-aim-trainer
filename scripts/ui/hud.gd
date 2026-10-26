@@ -10,6 +10,7 @@ var _bar: ColorRect
 var _flash: Label
 var _message: Label
 var _note: Label
+var _countdown: Label
 var _tint: ColorRect
 var _widgets: VBoxContainer
 var _flash_tween: Tween
@@ -65,8 +66,14 @@ func _ready() -> void:
 	UI.place(_flash, Vector4(0.5, 0.5, 0.5, 0.5), Vector4(-400, 46, 400, 92))
 	add_child(_flash)
 
+	_countdown = UI.label("", 120, UI.TEXT, true)
+	_countdown.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	UI.place(_countdown, Vector4(0.5, 0.5, 0.5, 0.5), Vector4(-300, -330, 300, -170))   # above the message
+	add_child(_countdown)
+
 	# Outlines keep the text readable against both the light and the dark room.
-	for l: Label in [_title, _info, _stats, _message, _flash, _note]:
+	for l: Label in [_title, _info, _stats, _message, _flash, _note, _countdown]:
 		l.add_theme_constant_override("outline_size", 7)
 		l.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.8))
 
@@ -82,6 +89,7 @@ func reset() -> void:
 	set_progress(0.0)
 	message("")
 	set_note("")
+	countdown("")
 	_flash.text = ""
 	UI.clear(_widgets)
 
@@ -115,6 +123,11 @@ func flash(text: String, color: Color = UI.TEXT) -> void:
 	_flash_tween = create_tween()
 	_flash_tween.tween_interval(0.45)
 	_flash_tween.tween_property(_flash, "modulate:a", 0.0, 0.35)
+
+
+## The big countdown number above the crosshair before a run; "" hides it.
+func countdown(text: String) -> void:
+	_countdown.text = text
 
 
 ## A message above the crosshair that stays until replaced.

@@ -103,6 +103,30 @@ func until_accurate(t: float, horizon: float = 0.4) -> Dictionary:
 	return {"seconds": -1.0, "falling": falling}
 
 
+## When speed last fell to `thr` before t (speed is linear between samples), or -1; `speed_now` is
+## the speed at t.
+func became_accurate(t: float, thr: float, speed_now: float) -> float:
+	var later := Vector2(t, speed_now)
+	for i in range(samples.size() - 1, -1, -1):
+		var s: Vector3 = samples[i]
+		if s.x > t:
+			continue
+		var speed := Vector2(s.y, s.z).length()
+		if speed > thr:
+			return lerpf(s.x, later.x, (speed - thr) / (speed - later.y))
+		later = Vector2(s.x, speed)
+	return -1.0
+
+
+## The highest speed between `from` and `to`.
+func peak_speed(from: float, to: float) -> float:
+	var peak := 0.0
+	for s: Vector3 in samples:
+		if s.x >= from and s.x <= to:
+			peak = maxf(peak, Vector2(s.y, s.z).length())
+	return peak
+
+
 ## Time of the last change of key to `pressed` at or before t, or -1.
 func last_change(key: String, pressed: bool, t: float) -> float:
 	for i in range(key_log.size() - 1, -1, -1):

@@ -42,16 +42,19 @@ func clear() -> void:
 	_tracers.clear()
 
 
-## A shot from `origin` along `dir`. Misses leave a hole where they hit the room; a tracer starts
-## at `muzzle` (where the gun's muzzle shows on screen).
-func shot(origin: Vector3, dir: Vector3, hit: bool, tracer: bool, muzzle: Vector3) -> void:
+## A shot from `origin` along `dir`. Misses leave a hole where they hit the room, or the mode's own
+## wall when `surface` has where ({"dist", "normal"}); a tracer starts at `muzzle` (where the gun's
+## muzzle shows on screen).
+func shot(origin: Vector3, dir: Vector3, hit: bool, tracer: bool, muzzle: Vector3, surface: Dictionary = {}) -> void:
 	_camera = get_viewport().get_camera_3d()
 	var dist := Defs.ray_box_exit(origin, dir, Defs.ROOM_MIN, Defs.ROOM_MAX)
+	if surface.has("dist"):
+		dist = surface["dist"]
 	if dist <= 0.0:
 		return
 	var point := origin + dir * dist
 	if not hit:
-		_add_hole(point, _normal_at(point), dist)
+		_add_hole(point, surface["normal"] if surface.has("normal") else _normal_at(point), dist)
 	if tracer:
 		_add_tracer(muzzle, point)
 

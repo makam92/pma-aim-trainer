@@ -3,7 +3,8 @@ extends "res://scripts/modes/mode_base.gd"
 ## with real CS2 movement (ADAD, counter-strafes, max speed) at a new spot and distance. Only a kill
 ## brings the next bot; misses, and body hits when aiming for heads, count against your accuracy.
 ## With lives (3, or 1 on Hard) every shot that doesn't kill costs one, and losing the last one starts
-## you over from zero, like in Target Confirmation. The clock starts on the start target.
+## you over from zero, like in Target Confirmation. The first attempt starts with the run; a new one
+## starts when you shoot the start target.
 
 const Sim = preload("res://scripts/movement_sim.gd")
 const Brain = preload("res://scripts/bot_brain.gd")
@@ -50,10 +51,21 @@ func begin() -> void:
 	var best: Variant = Stats.best("tconfirm", Defs.variant("tconfirm", Settings))
 	if best != null:
 		_pb = int(best.get("score", 0))
-	_new_attempt()
+	attempts = 1
+	lives_left = lives
+	hud.message(_rule_text(), UI.DIM)
+	_update_hud()
 
 
-## A fresh start from zero, waiting for the start target.
+## The first bot shows up as the run starts.
+func go() -> void:
+	phase = Phase.RUN
+	run_start = now()
+	hud.message("")
+	_spawn_bot()
+
+
+## After running out of lives: a fresh start from zero, waiting for the start target.
 func _new_attempt() -> void:
 	attempts += 1
 	kills = 0
@@ -65,13 +77,18 @@ func _new_attempt() -> void:
 	_start.setup(Defs.radius_for(0.9), UI.START)
 	_start.position = player.eye_position() + Vector3(0.0, 0.0, -Defs.TARGET_DIST)
 	add_child(_start)
-	var rule := ""
-	if lives == 1:
-		rule = "  ·  en miss och du börjar om"
-	elif lives > 1:
-		rule = "  ·  %d missar och du börjar om" % lives
-	hud.message("Skjut startmålet när du är redo" + rule, UI.DIM)
+	var rule := _rule_text()
+	hud.message("Skjut startmålet när du är redo" + ("  ·  " + rule.to_lower() if rule != "" else ""), UI.DIM)
 	_update_hud()
+
+
+## "En miss och du börjar om", or "" without lives.
+func _rule_text() -> String:
+	if lives == 1:
+		return "En miss och du börjar om"
+	if lives > 1:
+		return "%d missar och du börjar om" % lives
+	return ""
 
 
 func _process(_delta: float) -> void:

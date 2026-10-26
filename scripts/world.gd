@@ -8,11 +8,13 @@ const THEMES := [
 	{
 		"wall": Color(0.62, 0.55, 0.44), "line": Color(0.55, 0.48, 0.38), "major": Color(0.48, 0.42, 0.33),
 		"floor": Color(0.5, 0.45, 0.36), "eye": Color(0.8, 0.36, 0.1), "sky": Color(0.6, 0.67, 0.75),
+		"partition": Color(0.53, 0.47, 0.37), "frame": Color(0.3, 0.25, 0.19),
 		"ambient": 0.7, "sun": 1.0,
 	},
 	{
 		"wall": Color(0.13, 0.14, 0.17), "line": Color(0.21, 0.225, 0.27), "major": Color(0.29, 0.31, 0.37),
 		"floor": Color(0.1, 0.105, 0.125), "eye": Color(0.62, 0.45, 0.16), "sky": Color(0.05, 0.055, 0.07),
+		"partition": Color(0.17, 0.18, 0.22), "frame": Color(0.07, 0.075, 0.09),
 		"ambient": 0.55, "sun": 0.85,
 	},
 ]
@@ -54,6 +56,11 @@ void fragment() {
 }
 """
 
+## For walls a mode builds: the room's grid a shade darker, so a wall stands out against the room
+## behind it, and a darker colour for door frames. Both follow the theme.
+var partition: ShaderMaterial
+var frame: StandardMaterial3D
+
 var _env: Environment
 var _sun: DirectionalLight3D
 var _walls: ShaderMaterial
@@ -79,6 +86,10 @@ func _ready() -> void:
 	_walls.shader = shader
 	_floor = ShaderMaterial.new()
 	_floor.shader = shader
+	partition = ShaderMaterial.new()
+	partition.shader = shader
+	frame = StandardMaterial3D.new()
+	frame.roughness = 0.9
 
 	var lo := Defs.ROOM_MIN
 	var hi := Defs.ROOM_MAX
@@ -100,11 +111,16 @@ func _apply_theme() -> void:
 	_env.background_color = theme["sky"]
 	_env.ambient_light_energy = theme["ambient"]
 	_sun.light_energy = theme["sun"]
-	for mat: ShaderMaterial in [_walls, _floor]:
-		mat.set_shader_parameter("base_color", theme["floor"] if mat == _floor else theme["wall"])
-		mat.set_shader_parameter("line_color", theme["line"])
-		mat.set_shader_parameter("major_color", theme["major"])
+	# The partition's grid lines keep the same contrast to it as the room's lines to its walls.
+	var shade: float = (theme["partition"] as Color).get_luminance() / (theme["wall"] as Color).get_luminance()
+	for mat: ShaderMaterial in [_walls, _floor, partition]:
+		var k := shade if mat == partition else 1.0
+		var base: Color = theme["floor"] if mat == _floor else (theme["partition"] if mat == partition else theme["wall"])
+		mat.set_shader_parameter("base_color", base)
+		mat.set_shader_parameter("line_color", (theme["line"] as Color) * k)
+		mat.set_shader_parameter("major_color", (theme["major"] as Color) * k)
 		mat.set_shader_parameter("eye_color", theme["eye"])
+	frame.albedo_color = theme["frame"]
 
 
 func _plane(plane_size: Vector2, pos: Vector3, rotation_deg: Vector3, mat: Material) -> void:

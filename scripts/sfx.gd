@@ -22,6 +22,7 @@ func _ready() -> void:
 	_add("miss", _tone(190.0, 150.0, 0.08, 0.3, 0.5))
 	_add("fail", _tone(440.0, 110.0, 0.38, 0.4, 0.35))
 	_add("start", _tone(880.0, 1320.0, 0.07, 0.3, 0.0))
+	_add("tick", _tone(660.0, 660.0, 0.06, 0.22, 0.0))
 	_add("done", _arpeggio([880.0, 1108.7, 1318.5, 1760.0], 0.075, 0.32))
 	_add("hurt", _thud())
 	_add("enemy", _shot())

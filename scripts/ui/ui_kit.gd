@@ -230,7 +230,7 @@ static func short_value(mode: String, score: Variant) -> String:
 static func main_value(mode: String, r: Dictionary) -> String:
 	if mode in ["grid", "flick", "micro", "confirm", "strafeaim"]:
 		return "%d träffar" % int(r.get("score", 0))
-	if mode in ["tconfirm", "punch"]:
+	if mode in ["tconfirm", "punch", "timing"]:
 		return "%d kills" % int(r.get("score", 0))
 	if mode == "track":
 		return dec(float(r.get("score", 0)) / 100.0, 1) + " %"

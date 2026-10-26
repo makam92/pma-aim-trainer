@@ -2,7 +2,7 @@ extends "res://scripts/modes/mode_base.gd"
 ## Strafe Aim: hit targets while you strafe with A/D and CS2's movement. A shot only counts when
 ## you're moving faster than half your max speed, so standing still and the turns in an ADAD don't
 ## count. Bullets go exactly where you aim (no movement inaccuracy here): it's your aim on the move
-## that's trained. Three targets at a time, for 60 seconds from your first step.
+## that's trained. Three targets at a time, for 60 seconds.
 
 const Sim = preload("res://scripts/movement_sim.gd")
 const Target = preload("res://scripts/target.gd")
@@ -49,8 +49,12 @@ func begin() -> void:
 	hud.add_widget(meter)
 	for i in ACTIVE:
 		_spawn()
-	hud.message("Strafea med A/D och skjut målen medan du rör dig. Klockan startar när du rör dig.", UI.DIM)
+	hud.message("Strafea med A/D och skjut målen medan du rör dig.", UI.DIM)
 	_update_hud()
+
+
+func go() -> void:
+	_run_start = now()
 
 
 func _process(_delta: float) -> void:
@@ -74,8 +78,7 @@ func key_event(key: String, pressed: bool, t: float) -> void:
 		return
 	_held[key] = pressed
 	sim.set_key(t, key, pressed)
-	if pressed and _run_start < 0.0:
-		_run_start = t
+	if pressed:
 		hud.message("")
 
 

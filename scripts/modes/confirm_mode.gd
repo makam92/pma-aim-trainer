@@ -1,7 +1,8 @@
 extends "res://scripts/modes/mode_base.gd"
 ## Target Confirmation: hit as many targets as you can in 60 seconds without missing once. One miss
 ## and you start over. Targets are real head size at random distances, so near ones look big and
-## far ones small, like in a real match. The clock starts when you shoot the start target.
+## far ones small, like in a real match. The first attempt starts with the run; after a miss the
+## clock starts again when you shoot the start target.
 
 const Target = preload("res://scripts/target.gd")
 const HeadModel = preload("res://scripts/head_model.gd")
@@ -35,7 +36,16 @@ func begin() -> void:
 	var best: Variant = Stats.best("confirm", Defs.variant("confirm", Settings))
 	if best != null:
 		_pb = int(best.get("score", 0))
-	_new_attempt()
+	attempts = 1
+	var dist := Defs.random_distance(Defs.TARGET_RANGES[Settings.confirm_range])
+	_spawn(_next_angles(Vector2.ZERO, dist), dist, false)
+	_update_hud()
+
+
+func go() -> void:
+	phase = Phase.RUN
+	run_start = now()
+	target_start = run_start
 
 
 func _process(_delta: float) -> void:
@@ -78,6 +88,7 @@ static func summary(r: Dictionary) -> Dictionary:
 	return {"headline": str(int(r.get("score", 0))), "unit": "träffar på 60 s", "rows": rows, "note": note}
 
 
+## After a miss: a fresh start from zero, waiting for the start target.
 func _new_attempt() -> void:
 	attempts += 1
 	hits = 0

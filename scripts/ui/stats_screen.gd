@@ -9,7 +9,8 @@ const Defs = preload("res://scripts/defs.gd")
 const ProgressChart = preload("res://scripts/ui/progress_chart.gd")
 const TABS := [
 	["grid", "Gridshot"], ["flick", "Flicks"], ["micro", "Micro Adjustments"], ["track", "Tracking"], ["confirm", "Target Confirmation"],
-	["tconfirm", "Tracking Confirmation"], ["punch", "Aim Punch"], ["strafeaim", "Strafe Aim"], ["strafe", "Counter-strafe"],
+	["tconfirm", "Tracking Confirmation"], ["punch", "Aim Punch"], ["timing", "Click Timing"], ["strafeaim", "Strafe Aim"],
+	["strafe", "Counter-strafe"],
 	["playlist", "Dagens pass"],
 ]
 const MONTHS := ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
@@ -31,7 +32,7 @@ func _ready() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(1520, 0)
+	panel.custom_minimum_size = Vector2(1680, 0)   # room for all the tabs in one row
 	center.add_child(panel)
 	var col := UI.vbox(16)
 	panel.add_child(col)

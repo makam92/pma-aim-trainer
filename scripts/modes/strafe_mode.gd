@@ -1,7 +1,6 @@
 extends "res://scripts/modes/mode_base.gd"
-## Counter-strafe: strafe with A/D, stop with the opposite key and shoot, for 60 seconds from your
-## first step. Every shot is checked against CS2's rule that you're accurate at or below 34 % of
-## the weapon's max speed.
+## Counter-strafe: strafe with A/D, stop with the opposite key and shoot, for 60 seconds. Every shot
+## is checked against CS2's rule that you're accurate at or below 34 % of the weapon's max speed.
 
 const Sim = preload("res://scripts/movement_sim.gd")
 const Dummy = preload("res://scripts/dummy.gd")
@@ -47,8 +46,12 @@ func begin() -> void:
 	graph = Graph.new()
 	graph.sim = sim
 	hud.add_widget(graph)
-	hud.message("Strafea med A/D, tryck motsatt tangent för att stanna och skjut. Klockan startar när du rör dig.", UI.DIM)
+	hud.message("Strafea med A/D, tryck motsatt tangent för att stanna och skjut.", UI.DIM)
 	_update_hud()
+
+
+func go() -> void:
+	_run_start = now()
 
 
 func _process(_delta: float) -> void:
@@ -75,8 +78,6 @@ func key_event(key: String, pressed: bool, t: float) -> void:
 		return
 	_held[key] = pressed
 	sim.set_key(t, key, pressed)
-	if pressed and _run_start < 0.0:
-		_run_start = t
 
 
 ## Keys may have changed while the game was paused.
@@ -187,7 +188,7 @@ func _evaluate(t: float, vel: Vector2) -> Dictionary:
 		else:
 			stop_start = released
 	if info["accurate"]:
-		var became := _became_accurate(t, thr, speed)
+		var became := sim.became_accurate(t, thr, speed)
 		info["verdict"] = "accurate"
 		if became >= 0.0:
 			info["t_acc"] = became
@@ -216,20 +217,6 @@ func _keys_for(v: Vector2) -> Array:
 	if absf(v.dot(right)) >= absf(v.dot(forward)):
 		return ["d", "a"] if v.dot(right) > 0.0 else ["a", "d"]
 	return ["w", "s"] if v.dot(forward) > 0.0 else ["s", "w"]
-
-
-## When speed last fell to the threshold before t (speed is linear between samples), or -1.
-func _became_accurate(t: float, thr: float, speed_now: float) -> float:
-	var later := Vector2(t, speed_now)
-	for i in range(sim.samples.size() - 1, -1, -1):
-		var s: Vector3 = sim.samples[i]
-		if s.x > t:
-			continue
-		var speed := Vector2(s.y, s.z).length()
-		if speed > thr:
-			return lerpf(s.x, later.x, (speed - thr) / (speed - later.y))
-		later = Vector2(s.x, speed)
-	return -1.0
 
 
 func _points(info: Dictionary) -> int:

@@ -14,22 +14,23 @@ const Defs = preload("res://scripts/defs.gd")
 const COLUMNS := 5
 const CARD_WIDTH := 344.0
 const CARD_PADDING := 20.0
+const PLAYLIST_WIDTH := 1120.0
 ## In the order of the standard playlist.
 const CARDS := [
 	{
 		"id": "grid",
 		"title": "Gridshot",
-		"text": "Tre huvuden åt gången i ett rutnät. Varje träff tar fram ett nytt, och klockan startar på första träffen.",
+		"text": "Tre huvuden åt gången i ett rutnät. Varje träff tar fram ett nytt på en ledig plats.",
 	},
 	{
 		"id": "flick",
 		"title": "Flicks",
-		"text": "Håll siktet i ringen, flicka till huvudet som dyker upp och skjut. Visar om du flickar för långt eller för kort.",
+		"text": "Två huvuden är alltid uppe. Flicka till ett och skjut, så dyker ett nytt upp en bit bort. Visar om du flickar för långt eller för kort.",
 	},
 	{
 		"id": "micro",
 		"title": "Micro Adjustments",
-		"text": "Ett huvud dyker upp en bit från siktet, var du än siktar. Korrigera det sista och skjut. Visar hur rakt du justerar.",
+		"text": "Först en flick, sedan tre små korrigeringar till huvuden strax bredvid siktet, och så om igen. Visar hur rakt du justerar.",
 	},
 	{
 		"id": "track",
@@ -50,6 +51,11 @@ const CARDS := [
 		"id": "punch",
 		"title": "Aim Punch",
 		"text": "Fienden skjuter först och varje träff rycker siktet som i CS2. Hitta tillbaka till huvudet och döda honom innan han dödar dig.",
+	},
+	{
+		"id": "timing",
+		"title": "Click Timing",
+		"text": "Håll en dörr medan CS2-gubbar springer förbi. Ett skott per gubbe: tajma klicket på huvudet, stilla eller med counter-strafe.",
 	},
 	{
 		"id": "strafeaim",
@@ -80,20 +86,21 @@ func _ready() -> void:
 	var col := UI.vbox(22)
 	center.add_child(col)
 
+	# The title, with the daily playlist beside it; the exercises in a grid below.
+	var top := UI.hbox(24)
 	var head := UI.vbox(2)
-	var title := UI.label("PMA AIM TRAINER", 56, UI.TEXT, true)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	head.add_child(title)
-	var sub := UI.label("Nio övningar på 60 sekunder med CS2:s sens, FOV, rörelse och modeller", 18, UI.DIM)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	head.add_child(sub)
-	col.add_child(head)
+	head.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.alignment = BoxContainer.ALIGNMENT_CENTER
+	head.add_child(UI.label("PMA AIM TRAINER", 52, UI.TEXT, true))
+	head.add_child(UI.label("Tio övningar på 60 sekunder med CS2:s sens, FOV, rörelse och modeller", 17, UI.DIM))
+	top.add_child(head)
+	top.add_child(_playlist_card())
+	col.add_child(top)
 
 	var cards := GridContainer.new()
 	cards.columns = COLUMNS
 	cards.add_theme_constant_override("h_separation", 16)
 	cards.add_theme_constant_override("v_separation", 16)
-	cards.add_child(_playlist_card())
 	for card: Dictionary in CARDS:
 		cards.add_child(_card(card))
 	col.add_child(cards)
@@ -139,30 +146,38 @@ func refresh() -> void:
 
 
 ## The daily playlist as the first card: what's in it, how long it takes and the streak.
+## The daily playlist as a wide panel: what's in it on the left, its length and buttons on the right.
 func _playlist_card() -> Control:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(CARD_WIDTH, 0)
-	panel.add_theme_stylebox_override("panel", UI.box(Color(0.1, 0.09, 0.06, 0.96), 14, Color(UI.ACCENT, 0.45), CARD_PADDING, 18))
-	var v := UI.vbox(10)
-	panel.add_child(v)
-	v.add_child(UI.label("Dagens pass", 24, UI.ACCENT, true))
+	panel.custom_minimum_size = Vector2(PLAYLIST_WIDTH, 0)
+	panel.add_theme_stylebox_override("panel", UI.box(Color(0.1, 0.09, 0.06, 0.96), 14, Color(UI.ACCENT, 0.45), CARD_PADDING, 16))
+	var row := UI.hbox(24)
+	panel.add_child(row)
+	var v := UI.vbox(6)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(v)
+	var heading := UI.hbox(14)
+	heading.add_child(UI.label("Dagens pass", 24, UI.ACCENT, true))
 	_playlist_status = UI.label("", 16, UI.DIM, true)
-	v.add_child(_playlist_status)
+	_playlist_status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	heading.add_child(_playlist_status)
+	v.add_child(heading)
 	_playlist_text = UI.label("", 15, UI.DIM)
 	_playlist_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_playlist_text.custom_minimum_size = Vector2(CARD_WIDTH - CARD_PADDING * 2.0, 0)
+	_playlist_text.custom_minimum_size = Vector2(PLAYLIST_WIDTH - 360.0, 0)
 	v.add_child(_playlist_text)
+	var side := UI.vbox(10)
+	side.alignment = BoxContainer.ALIGNMENT_CENTER
 	_playlist_total = UI.label("", 15, UI.TEXT, true)
-	v.add_child(_playlist_total)
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	v.add_child(spacer)
-	var bottom := UI.hbox(10)
-	bottom.alignment = BoxContainer.ALIGNMENT_END
-	bottom.add_child(UI.button("Ändra", func() -> void: playlist_edit_requested.emit()))
+	_playlist_total.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	side.add_child(_playlist_total)
+	var buttons := UI.hbox(10)
+	buttons.alignment = BoxContainer.ALIGNMENT_END
+	buttons.add_child(UI.button("Ändra", func() -> void: playlist_edit_requested.emit()))
 	_playlist_start = UI.button("Starta passet", func() -> void: playlist_requested.emit(), true)
-	bottom.add_child(_playlist_start)
-	v.add_child(bottom)
+	buttons.add_child(_playlist_start)
+	side.add_child(buttons)
+	row.add_child(side)
 	return panel
 
 
@@ -264,6 +279,13 @@ func _options_for(id: String) -> Array:
 				["Skydd", Defs.ARMOR, "punch_armor"],
 				["Avstånd", ranges, "punch_range"],
 				["Sikta på", zones, "punch_zone"],
+			]
+		"timing":
+			return [
+				["Fart", speeds + [Defs.MIXED_SPEED], "timing_speed"],
+				["Avstånd", Defs.TRACK_DISTS.map(func(d: float) -> String: return "%d u (%d m)" % [d, roundi(d * Defs.UNIT)]), "timing_dist"],
+				["Öppning", Defs.DOORS.map(func(d: Dictionary) -> String: return "%s %d u" % [d["name"], d["width"]]), "timing_door"],
+				["Rörelse", Defs.TIMING_MOVES, "timing_move"],
 			]
 		"strafeaim":
 			return [

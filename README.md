@@ -6,13 +6,17 @@ maxfart.
 
 ## Lägen
 
-Alla lägen körs i 60 sekunder.
+Alla lägen körs i 60 sekunder och börjar med en nedräkning 3-2-1, som freeze time i CS2: du kan
+sikta men inte skjuta eller gå, och klockan startar på "KÖR!". Tiden efter varje träff visas under
+siktet. Båda går att stänga av under Inställningar → Övningar.
 
 - **Gridshot**: tre huvuden åt gången i ett rutnät, varje träff tar fram ett nytt.
-- **Flicks**: håll siktet i ringen, flicka till huvudet som dyker upp. Så många träffar som möjligt;
+- **Flicks**: två huvuden är alltid uppe; flicka till ett och skjut, så dyker ett nytt upp en bit
+  bort (aldrig vid siktet, och alltid så att båda syns samtidigt). Så många träffar som möjligt;
   visar också om du flickar för långt eller för kort.
-- **Micro Adjustments**: ett huvud dyker upp 0,5–5° från siktet, var du än siktar. Korrigera och
-  skjut; visar också hur rakt du justerar (överkorrigeringar sänker rakheten).
+- **Micro Adjustments**: först en flick till ett huvud en bit bort, sedan tre små korrigeringar till
+  huvuden 0,5–5° från siktet, och så om igen. Visar hur rakt du justerar (överkorrigeringar sänker
+  rakheten), snittiden för flickar och korrigeringar var för sig och om du flickar för långt eller kort.
 - **Tracking**: följ en gubbe som strafear med riktig CS2-rörelse (ADAD, counter-strafes, upp till
   250 u/s). Mäter tid på huvud och kropp, även direkt efter riktningsbyten.
 - **Target Confirmation**: så många huvuden du hinner, en miss och du börjar om från noll.
@@ -26,6 +30,14 @@ Alla lägen körs i 60 sekunder.
   kulorna går ännu högre tills rycket släppt; hitta tillbaka till huvudet och döda honom innan han
   dödar dig (3 träffar utan kevlar, 4 med). Kevlar ger mycket mindre ryck. Visar hur ofta skotten
   direkt efter en träff dödar jämfört med resten.
+- **Click Timing**: håll en dörröppning medan CS2-gubbar springer förbi bakom väggen, en i taget,
+  från slumpad sida och med slumpad väntan. Du har ett skott per gubbe, så det är timingen i klicket
+  som tränas: i 250 u/s är huvudet under ett stilla sikte i bara runt 40 ms. Varje skott visar hur
+  många ms för tidigt eller sent det var (eller om det gick över eller under), och rundan visar om
+  du brukar skjuta för tidigt eller för sent. Välj fart (eller Blandad fart), avstånd och hur bred
+  öppningen är: smal (48 u), dörr (64 u) eller bred (128 u). Väggen stoppar kulorna. Med
+  **Counter-strafe** strafear du med A/D och CS2-rörelse medan du väntar och kontrar innan skottet:
+  skjuter du innan du stannat sprids kulan som i CS2, och skott utan strafe innan räknas inte.
 - **Strafe Aim**: strafea med A/D och CS2-rörelse och träffa målen medan du rör dig. Skott räknas
   bara när du har minst halva maxfarten, så stillastående skott och vändningarna i ADAD räknas inte.
 - **Counter-strafe**: strafea, kontra och skjut. Varje skott får en tidslinje som visar när du blev
@@ -36,9 +48,9 @@ Nära, Medel eller Långt. Längre bort ser de mindre ut, precis som i spelet.
 
 Gubbarna i Tracking och Tracking Confirmation croucher ibland, som i CS2: oftast när de stannar och
 ibland mitt i ADAD. Crouchade går de i 34 % av maxfarten (85 u/s med kniv) och huvudet sjunker
-17 units. Det går att stänga av under Inställningar → Gubbar.
+17 units. Det går att stänga av under Inställningar → Övningar.
 
-**Dagens pass** kör som standard alla nio lägena tre gånger var (cirka 32 minuter). Med **Ändra**
+**Dagens pass** kör som standard alla tio lägena tre gånger var (cirka 36 minuter). Med **Ändra**
 väljer du själv hur många rundor av varje övning (0–5) och i vilken ordning. Trycker du Esc under
 passet visas hela passet bredvid pausmenyn, och du kan hoppa till vilken runda som helst. Efteråt
 visas en sammanfattning mot förra passet och hur många dagar i rad du tränat. **Statistik** har en

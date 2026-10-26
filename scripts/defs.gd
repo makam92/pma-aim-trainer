@@ -18,7 +18,7 @@ const TARGET_TYPES := ["CS2-huvud", "Klot"]
 const RUN_SECONDS := 60.0
 ## The standard daily playlist: every mode PLAYLIST_REPS times in a row, in this order (Gridshot
 ## warms up). Settings.playlist holds the player's own rounds and order.
-const PLAYLIST := ["grid", "flick", "micro", "track", "confirm", "tconfirm", "punch", "strafeaim", "strafe"]
+const PLAYLIST := ["grid", "flick", "micro", "track", "confirm", "tconfirm", "punch", "timing", "strafeaim", "strafe"]
 const PLAYLIST_REPS := 3
 const PLAYLIST_MAX_REPS := 5
 ## Targets never come lower than this above the floor (meters), however far away they are.
@@ -71,11 +71,15 @@ const ARMOR := ["Utan kevlar", "Med kevlar"]
 ## Tracking Confirmation: how many shots that don't kill you get before you start over from zero
 ## (0: no limit, misses only lower your accuracy).
 const TCONF_LEVELS := [{"name": "Normal", "lives": 0}, {"name": "3 liv", "lives": 3}, {"name": "Hard", "lives": 1}]
+## Click Timing: how wide the doorway is that the bots run past, in CS2 units (a normal door is 64).
+const DOORS := [{"name": "Smal", "width": 48.0}, {"name": "Dörr", "width": 64.0}, {"name": "Bred", "width": 128.0}]
+## Click Timing: stand still, or strafe with A/D and counter-strafe before the shot.
+const TIMING_MOVES := ["Stå still", "Counter-strafe"]
 
 
 ## Modes where the AK's recoil and inaccuracy change where shots land (Counter-strafe has its own
 ## weapons, tracking doesn't shoot, and Strafe Aim is about aiming while you move).
-const RECOIL_MODES := ["grid", "flick", "micro", "confirm", "tconfirm", "punch"]
+const RECOIL_MODES := ["grid", "flick", "micro", "confirm", "tconfirm", "punch", "timing"]
 
 
 ## The options a run used, so personal bests only compare runs with the same settings.
@@ -91,9 +95,9 @@ static func _options_text(mode: String, s: Object) -> String:
 		"grid":
 			return "%s · %s · 60 s" % [TARGET_TYPES[s.grid_target], TARGET_RANGES[s.grid_range]["name"]]
 		"flick":
-			return "%s · %s · 60 s" % [TARGET_TYPES[s.flick_target], TARGET_RANGES[s.flick_range]["name"]]
+			return "%s · %s · 2 mål · 60 s" % [TARGET_TYPES[s.flick_target], TARGET_RANGES[s.flick_range]["name"]]
 		"micro":
-			return "%s · %s · %s · 60 s" % [TARGET_TYPES[s.micro_target], TARGET_RANGES[s.micro_range]["name"],
+			return "%s · %s · %s · flick + 3 · 60 s" % [TARGET_TYPES[s.micro_target], TARGET_RANGES[s.micro_range]["name"],
 				micro_offset_text(MICRO_OFFSETS[s.micro_offset])]
 		"confirm":
 			var limit: float = CONFIRM_LIMITS[s.confirm_limit]
@@ -113,6 +117,14 @@ static func _options_text(mode: String, s: Object) -> String:
 		"punch":
 			return "%s · %s · %s · 60 s" % [ARMOR[s.punch_armor], TARGET_RANGES[s.punch_range]["name"],
 				str(TRACK_ZONES[s.punch_zone]["name"]).to_lower()]
+		"timing":
+			var speed_text := MIXED_SPEED
+			if s.timing_speed < TRACK_SPEEDS.size():
+				var bot: Dictionary = TRACK_SPEEDS[s.timing_speed]
+				speed_text = "%s %d u/s" % [bot["name"], bot["speed"]]
+			var door: Dictionary = DOORS[s.timing_door]
+			return "%s · %d u · %s %d u · huvud · 60 s" % [speed_text, TRACK_DISTS[s.timing_dist], str(door["name"]).to_lower(),
+				door["width"]] + (" · counter-strafe" if s.timing_move == 1 else "")
 		"strafeaim":
 			var own: Dictionary = TRACK_SPEEDS[s.saim_speed]
 			return "%s · %s · %s %d u/s · 60 s" % [TARGET_TYPES[s.saim_target], TARGET_RANGES[s.saim_range]["name"],
@@ -194,6 +206,34 @@ static func ray_capsule(origin: Vector3, dir: Vector3, a: Vector3, b: Vector3, r
 	if tb < 0.0:
 		return ta
 	return minf(ta, tb)
+
+
+## Where a ray from outside an axis-aligned box first hits it: {"dist", "normal"} of that face, or
+## {} when it misses (or starts inside).
+static func ray_box_entry(origin: Vector3, dir: Vector3, lo: Vector3, hi: Vector3) -> Dictionary:
+	var near := -INF
+	var far := INF
+	var axis := -1
+	for i in 3:
+		if absf(dir[i]) < 1e-9:
+			if origin[i] < lo[i] or origin[i] > hi[i]:
+				return {}
+			continue
+		var a := (lo[i] - origin[i]) / dir[i]
+		var b := (hi[i] - origin[i]) / dir[i]
+		if a > b:
+			var swap := a
+			a = b
+			b = swap
+		if a > near:
+			near = a
+			axis = i
+		far = minf(far, b)
+	if axis < 0 or near > far or near < 0.0:
+		return {}
+	var normal := Vector3.ZERO
+	normal[axis] = -signf(dir[axis])
+	return {"dist": near, "normal": normal}
 
 
 ## Distance along a ray that starts inside an axis-aligned box to where it leaves the box.

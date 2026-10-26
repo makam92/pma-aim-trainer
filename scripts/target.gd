@@ -61,9 +61,7 @@ func hit_distance(origin: Vector3, dir: Vector3) -> float:
 	return Defs.ray_sphere(origin, dir, global_position, radius)
 
 
-## Plays a quick burst and frees the target. Callers should drop their reference right away.
+## Takes the target away the moment it's hit. Callers should drop their reference right away.
 func pop() -> void:
-	var tween := create_tween()
-	tween.tween_property(self, "scale", Vector3.ONE * 1.35, 0.05)
-	tween.tween_property(self, "scale", Vector3.ONE * 0.01, 0.08)
-	tween.tween_callback(queue_free)
+	visible = false
+	queue_free()

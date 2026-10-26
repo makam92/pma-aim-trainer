@@ -13,13 +13,14 @@ const RANKING := {
 	"track": {"key": "score", "higher": true},
 	"tconfirm": {"key": "score", "higher": true},
 	"punch": {"key": "score", "higher": true},
+	"timing": {"key": "score", "higher": true},
 	"strafeaim": {"key": "score", "higher": true},
 }
 
 ## Runs per mode, plus "playlist": finished daily playlists as
 ## {"date", "results": {mode: {"scores", "variant", "best"} or null when skipped}}; modes that
 ## weren't in that playlist are left out.
-var data := {"grid": [], "flick": [], "micro": [], "confirm": [], "strafe": [], "track": [], "tconfirm": [], "punch": [],
+var data := {"grid": [], "flick": [], "micro": [], "confirm": [], "strafe": [], "track": [], "tconfirm": [], "punch": [], "timing": [],
 	"strafeaim": [], "playlist": []}
 ## Off during the screenshot tour so fake results never reach disk.
 var persist := true

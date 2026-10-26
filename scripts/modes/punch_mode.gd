@@ -2,11 +2,9 @@ extends "res://scripts/modes/mode_base.gd"
 ## Aim Punch: duels where the enemy shoots first. A CS2 bot with an AK shows up and fires short bursts
 ## at you; every hit punches your aim like in CS2 (the view jumps up, your bullets go higher still,
 ## then it settles), and you have to find his head again and kill him before he kills you. With
-## kevlar the punch is much smaller and you can take one hit more. Kills in 60 seconds from the
-## start target.
+## kevlar the punch is much smaller and you can take one hit more. Kills in 60 seconds.
 
 const Dummy = preload("res://scripts/dummy.gd")
-const Target = preload("res://scripts/target.gd")
 const HeadModel = preload("res://scripts/head_model.gd")
 const HealthBar = preload("res://scripts/ui/health_bar.gd")
 
@@ -44,7 +42,6 @@ var recover_times: Array = []
 var punched_shots := 0
 var punched_kills := 0
 
-var _start: Target = null
 var _dummy: Dummy = null
 var _health: HealthBar
 var _alive := false            # the duel with the current enemy is still on
@@ -66,14 +63,18 @@ func begin() -> void:
 	var best: Variant = Stats.best("punch", Defs.variant("punch", Settings))
 	if best != null:
 		_pb = int(best.get("score", 0))
-	_start = Target.new()
-	_start.setup(Defs.radius_for(0.9), UI.START)
-	_start.position = player.eye_position() + Vector3(0.0, 0.0, -Defs.TARGET_DIST)
-	add_child(_start)
 	_health = HealthBar.new()
 	hud.add_widget(_health)
-	hud.message("Skjut startmålet när du är redo. Fienden skjuter först: hitta tillbaka och döda honom.", UI.DIM)
+	hud.message("Fienden skjuter först: hitta tillbaka och döda honom.", UI.DIM)
 	_update_hud()
+
+
+## The first enemy shows up shortly after the run starts.
+func go() -> void:
+	phase = Phase.RUN
+	run_start = now()
+	_next_duel = run_start + NEXT_DUEL.x
+	hud.message("")
 
 
 func _process(_delta: float) -> void:
@@ -94,39 +95,27 @@ func _process(_delta: float) -> void:
 
 func shoot(origin: Vector3, dir: Vector3) -> void:
 	Sfx.play("shot")
-	match phase:
-		Phase.READY:
-			if _start and _start.hit_distance(origin, dir) >= 0.0:
-				shot_hit = true
-				_start.pop()
-				_start = null
-				phase = Phase.RUN
-				run_start = now()
-				_next_duel = run_start + NEXT_DUEL.x
-				hud.message("")
-				Sfx.play("start")
-		Phase.RUN:
-			if _dummy == null:
-				return
-			var part: String = _dummy.hit_test(origin, dir)["part"]
-			shot_hit = part != ""
-			if not _alive:
-				return    # he already got you; the next duel is on its way
-			var t := now()
-			var killed := part == "head" or (part == "body" and zone == "body")
-			if t - _last_hit <= PUNCH_WINDOW:
-				punched_shots += 1
-				punched_kills += int(killed)
-			if killed:
-				_win(t, part)
-			elif part == "body":
-				body_hits += 1
-				Sfx.play("hit")
-				_dummy.flash("body")
-			else:
-				misses += 1
-				Sfx.play("miss")
-			_update_hud()
+	if phase != Phase.RUN or _dummy == null:
+		return
+	var part: String = _dummy.hit_test(origin, dir)["part"]
+	shot_hit = part != ""
+	if not _alive:
+		return    # he already got you; the next duel is on its way
+	var t := now()
+	var killed := part == "head" or (part == "body" and zone == "body")
+	if t - _last_hit <= PUNCH_WINDOW:
+		punched_shots += 1
+		punched_kills += int(killed)
+	if killed:
+		_win(t, part)
+	elif part == "body":
+		body_hits += 1
+		Sfx.play("hit")
+		_dummy.flash("body")
+	else:
+		misses += 1
+		Sfx.play("miss")
+	_update_hud()
 
 
 static func summary(r: Dictionary) -> Dictionary:
@@ -216,7 +205,7 @@ func _win(t: float, part: String) -> void:
 	if _first_hit >= 0.0:
 		recover_times.append(t - _first_hit)
 	Sfx.play("head" if part == "head" else "hit", 1.0 + 0.5 * minf(kills / 30.0, 1.0))
-	hud.flash(UI.ms((t - _shown_at) * 1000.0), UI.GOOD)
+	flash_time(t - _shown_at)
 	_clear_bot()
 	_end_duel(t)
 

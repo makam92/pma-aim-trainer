@@ -28,7 +28,7 @@ const SAVED := [
 	"crosshair_color", "crosshair_length", "crosshair_gap", "crosshair_thickness",
 	"crosshair_outline", "crosshair_dot",
 	"volume", "fullscreen", "vsync", "fps_cap", "room_theme", "use_cs2_models", "resolution", "stretched",
-	"bot_crouch", "viewmodel", "ak_sound", "viewmodel_fov", "impacts", "ak_recoil",
+	"bot_crouch", "viewmodel", "ak_sound", "viewmodel_fov", "impacts", "ak_recoil", "countdown", "hit_times",
 	"grid_target", "grid_range",
 	"flick_target", "flick_range",
 	"micro_target", "micro_range", "micro_offset",
@@ -37,6 +37,7 @@ const SAVED := [
 	"track_speed", "track_dist", "track_zone",
 	"tconf_speed", "tconf_range", "tconf_zone", "tconf_lives",
 	"punch_armor", "punch_range", "punch_zone",
+	"timing_speed", "timing_dist", "timing_door", "timing_move",
 	"saim_target", "saim_range", "saim_speed",
 	"playlist",
 ]
@@ -68,6 +69,9 @@ var viewmodel_fov := 60
 ## from CS2 (off: every shot goes exactly where you aim).
 var impacts := true
 var ak_recoil := false
+## A 3-2-1 countdown before every run, and the time shown under the crosshair after a hit.
+var countdown := true
+var hit_times := true
 
 # Mode options, as indices into the lists in defs.gd.
 var grid_target := 0
@@ -91,6 +95,10 @@ var tconf_lives := 0
 var punch_armor := 0
 var punch_range := 0
 var punch_zone := 0
+var timing_speed := 0
+var timing_dist := 1
+var timing_door := 1
+var timing_move := 0
 var saim_target := 0
 var saim_range := 1
 var saim_speed := 3
@@ -110,7 +118,8 @@ func _ready() -> void:
 	if not dev_mode:
 		_load()
 	else:
-		AudioServer.set_bus_mute(0, true)   # tests and the screenshot tour run silently
+		AudioServer.set_bus_mute(0, true)   # tests and the screenshot tour run silently,
+		countdown = false                   # and start right away unless a check turns it on
 	apply()
 
 

@@ -20,6 +20,8 @@ const Impacts = preload("res://scripts/impacts.gd")
 const DummyScript = preload("res://scripts/dummy.gd")
 ## CS2's AK fires every 0.1 s (600 shots a minute); with it in hand, faster clicks don't fire.
 const AK_CYCLE := 0.1
+## Seconds counted down before a run starts (when that's turned on).
+const COUNTDOWN := 3.0
 const TargetScript = preload("res://scripts/target.gd")
 
 const MODES := {
@@ -30,13 +32,14 @@ const MODES := {
 	"confirm": preload("res://scripts/modes/confirm_mode.gd"),
 	"tconfirm": preload("res://scripts/modes/track_confirm_mode.gd"),
 	"punch": preload("res://scripts/modes/punch_mode.gd"),
+	"timing": preload("res://scripts/modes/timing_mode.gd"),
 	"strafeaim": preload("res://scripts/modes/strafeaim_mode.gd"),
 	"strafe": preload("res://scripts/modes/strafe_mode.gd"),
 }
 const MODE_TITLES := {
 	"grid": "Gridshot", "flick": "Flicks", "micro": "Micro Adjustments", "track": "Tracking",
 	"confirm": "Target Confirmation", "tconfirm": "Tracking Confirmation", "punch": "Aim Punch",
-	"strafeaim": "Strafe Aim", "strafe": "Counter-strafe",
+	"timing": "Click Timing", "strafeaim": "Strafe Aim", "strafe": "Counter-strafe",
 }
 
 enum State { MENU, PLAYING, PAUSED, RESULTS }
@@ -74,6 +77,8 @@ var _pause_began := 0
 var _last_shot := -INF
 var _shots_fired := 0
 var _trigger_down := false
+var _countdown_end := 0.0        # game time the countdown ends, 0 when none is running
+var _countdown_shown := 0
 var _ui_layer: CanvasLayer
 var _ui_root: Control
 var _view_rect: TextureRect
@@ -163,6 +168,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if state == State.PLAYING and _countdown_end > 0.0:
+		_update_countdown()
 	if state == State.MENU:
 		player.turn(delta * 2.5, 0.0)
 	elif state == State.PLAYING and _ak_punch():
@@ -190,7 +197,9 @@ func _input(event: InputEvent) -> void:
 			if key == null or key.echo:
 				return
 			if key.physical_keycode in Defs.MOVE_KEYS:
-				mode.key_event(Defs.MOVE_KEYS[key.physical_keycode], key.pressed, game_time())
+				# During the countdown keys wait: go() picks up the ones still held.
+				if _countdown_end <= 0.0:
+					mode.key_event(Defs.MOVE_KEYS[key.physical_keycode], key.pressed, game_time())
 			elif _pressed(event, KEY_ESCAPE):
 				_pause()
 				get_viewport().set_input_as_handled()
@@ -269,13 +278,40 @@ func start_mode(id: String) -> void:
 	get_tree().paused = false
 	_capture_mouse()
 	mode.begin()
+	_countdown_end = 0.0
+	if Settings.countdown:
+		_countdown_end = game_time() + COUNTDOWN
+		_countdown_shown = 0
+		_update_countdown()
+	else:
+		mode.go()
 
 
 func restart() -> void:
 	start_mode(mode_id)
 
 
+## Counts 3, 2, 1 above the crosshair with a tick each second, then starts the run. You can look
+## around meanwhile, but shots and movement wait for the start.
+func _update_countdown() -> void:
+	var left := _countdown_end - game_time()
+	if left <= 0.0:
+		_countdown_end = 0.0
+		hud.countdown("")
+		hud.flash("KÖR!", UI.GOOD)
+		Sfx.play("start")
+		mode.go()
+		mode.on_resume()   # keys held through the countdown count from now
+		return
+	var shown := ceili(left)
+	if shown != _countdown_shown:
+		_countdown_shown = shown
+		hud.countdown(str(shown))
+		Sfx.play("tick")
+
+
 func _end_mode() -> void:
+	_countdown_end = 0.0
 	if mode:
 		remove_child(mode)
 		mode.queue_free()
@@ -305,13 +341,16 @@ func _resume() -> void:
 	get_tree().paused = false
 	_show(null)
 	_capture_mouse()
-	mode.on_resume()
+	if _countdown_end <= 0.0:
+		mode.on_resume()
 
 
 ## One shot, if the gun is ready. With the AK's recoil on, the bullet goes where CS2's AK would send
 ## it (its kick so far plus its inaccuracy); otherwise exactly where you aim, unless an enemy's hits
 ## have punched your aim (Aim Punch). With the AK in hand, shots never come faster than the AK fires.
 func _fire() -> void:
+	if _countdown_end > 0.0 or not mode.can_shoot():
+		return   # nothing counts before the start, and a mode can hold the gun back
 	var t := game_time()
 	var eye: Vector3 = player.eye_position()
 	var dir: Vector3 = player.aim_dir()
@@ -326,6 +365,7 @@ func _fire() -> void:
 			dir = _bullet_dir({"punch": ak.aim_punch(t), "spread": Vector2.ZERO})
 	_last_shot = t
 	mode.shot_hit = false
+	mode.shot_dir = dir
 	mode.shoot(eye, dir)
 	viewmodel.fire()
 	if Settings.impacts and mode_id != "strafe" and mode_id != "track":
@@ -333,7 +373,9 @@ func _fire() -> void:
 		_sync_view_camera()
 		var start: Vector3 = view_camera.project_position(muzzle, 1.0) if muzzle != null \
 			else eye + player.camera.global_basis * Vector3(0.15, -0.12, -0.6)
-		impacts.shot(eye, dir, mode.shot_hit, _shots_fired % WeaponAK.TRACER_FREQUENCY == 0, start)
+		var went: Vector3 = mode.shot_dir
+		impacts.shot(eye, went, mode.shot_hit, _shots_fired % WeaponAK.TRACER_FREQUENCY == 0, start,
+			mode.surface(eye, went))
 	_shots_fired += 1
 
 
@@ -614,11 +656,89 @@ func _self_test() -> void:
 	if _shots_fired != 1:
 		failures += 1
 	# A check that stops on a script error returns nothing, and counts as failed.
-	for check: Callable in [_punch_check, _strafeaim_check, _tconfirm_lives_check, _tconfirm_mixed_check]:
+	for check: Callable in [_countdown_check, _flick_check, _micro_check, _punch_check, _strafeaim_check,
+			_tconfirm_lives_check, _tconfirm_mixed_check, _timing_check, _timing_strafe_check]:
 		var result: Variant = await check.call()
 		failures += 1 if result == null else int(result)
 	print("OK" if failures == 0 else "FEL: %d" % failures)
 	get_tree().quit(failures)
+
+
+## The countdown: 3, 2, 1, and only then does the run start; a shot before that doesn't count, one
+## right after does.
+func _countdown_check() -> int:
+	Settings.countdown = true
+	start_mode("grid")
+	var start := game_time()
+	var shown: Array[String] = [str(_countdown_shown)]
+	var early_hit := false
+	while _countdown_end > 0.0 and game_time() - start < 4.0:
+		await get_tree().process_frame
+		if str(_countdown_shown) != shown[-1]:
+			shown.append(str(_countdown_shown))
+		if not early_hit and game_time() - start > 1.0:
+			var targets: Dictionary = mode.get("_targets")
+			_aim_at((targets.values()[0] as Node3D).global_position)
+			_fire()
+			early_hit = true
+	Settings.countdown = false
+	var took := game_time() - start
+	var ignored: bool = mode.get("hits") == 0 and mode.get("misses") == 0
+	var started: bool = float(mode.get("_run_start")) >= start + 2.9
+	var targets: Dictionary = mode.get("_targets")
+	_aim_at((targets.values()[0] as Node3D).global_position)
+	_fire()
+	var counts: bool = mode.get("hits") == 1
+	var ok: bool = shown == ["3", "2", "1"] and absf(took - 3.0) < 0.1 and ignored and started and counts
+	print("[självtest] nedräkning: %s, start efter %s s, skott under nedräkningen räknas inte: %s, efteråt: %s" % [
+		" → ".join(PackedStringArray(shown)), UI.dec(took, 2), "ja" if ignored else "NEJ", "ja" if counts else "NEJ"])
+	return int(not ok)
+
+
+## Flicks: two heads are up from the start, and a hit takes that one away and brings a new one at
+## least 12° from your crosshair, near enough the other head that both fit on screen.
+func _flick_check() -> int:
+	start_mode("flick")
+	var heads: Array = mode.get("_targets")
+	var two_at_start := heads.size() == 2
+	_aim_at((heads[0]["node"] as Node3D).global_position)
+	_fire()
+	heads = mode.get("_targets")
+	var aim := Vector2(wrapf(player.yaw, -180.0, 180.0), player.pitch)
+	var newest: Vector2 = heads[-1]["angles"]
+	var other: Vector2 = heads[0]["angles"]
+	var screen := Vector2(game_view.size)
+	var reach := rad_to_deg(atan(tan(deg_to_rad(Defs.CS_VFOV / 2.0)) * screen.x / screen.y)) - 5.0
+	var away := newest.distance_to(aim)
+	var on_screen := absf(newest.x - aim.x) <= reach + 0.01 and absf(newest.x - other.x) <= reach + 0.01
+	var ok: bool = two_at_start and mode.get("hits") == 1 and heads.size() == 2 and away >= 12.0 and on_screen
+	print("[självtest] flicks: två huvuden från start: %s, träffen räknas och ett nytt kommer: %s, det nya %.0f° från siktet och %.0f° från det andra, båda i bild: %s" % [
+		"ja" if two_at_start else "NEJ", "ja" if mode.get("hits") == 1 and heads.size() == 2 else "NEJ",
+		away, newest.distance_to(other), "ja" if on_screen else "NEJ"])
+	return int(not ok)
+
+
+## Micro Adjustments: a flick at least 12° away, then three corrections no further from the crosshair
+## than the chosen distance, then a flick again.
+func _micro_check() -> int:
+	start_mode("micro")
+	var offset: Dictionary = Defs.MICRO_OFFSETS[Settings.micro_offset]
+	var steps: Array[String] = []
+	var ok := true
+	for i in 5:
+		var aim := Vector2(wrapf(player.yaw, -180.0, 180.0), player.pitch)
+		var target_angles: Vector2 = mode.get("_target_angles")
+		var away := aim.distance_to(target_angles)
+		var is_flick: bool = mode.get("_step") == 0
+		steps.append(("flick %.0f°" if is_flick else "micro %.1f°") % away)
+		ok = ok and is_flick == (i % 4 == 0)
+		ok = ok and (away >= 12.0 if is_flick else away <= float(offset["max"]) + 0.01)
+		_aim_at((mode.get("_target") as Node3D).global_position)
+		mode.shoot(player.eye_position(), player.aim_dir())
+	ok = ok and mode.get("hits") == 5
+	print("[självtest] micro adjustments: %s, flick + 3 i rätt ordning: %s" % [" → ".join(PackedStringArray(steps)),
+		"ja" if ok else "NEJ"])
+	return int(not ok)
 
 
 ## Aim Punch: his first hit kicks the view and sends a shot fired straight at his head over it; once
@@ -629,7 +749,6 @@ func _punch_check() -> int:
 	for armor in 2:
 		Settings.punch_armor = armor
 		start_mode("punch")
-		mode.shoot(player.eye_position(), Vector3.FORWARD)   # the start target, straight ahead
 		while mode.get("hits_taken") == 0:
 			await get_tree().process_frame
 		await get_tree().process_frame
@@ -669,7 +788,6 @@ func _tconfirm_lives_check() -> int:
 	Settings.tconf_lives = 2   # Hard
 	start_mode("tconfirm")
 	var eye: Vector3 = player.eye_position()
-	mode.shoot(eye, Vector3.FORWARD)   # the start target
 	await _wait(0.3)
 	var enemy: Node3D = mode.get("_dummy")
 	mode.shoot(eye, (enemy.call("head_centre") - eye).normalized())
@@ -680,7 +798,6 @@ func _tconfirm_lives_check() -> int:
 	var restarted: bool = mode.get("phase") == 0 and mode.get("attempts") == 2 and mode.get("kills") == 0
 	Settings.tconf_lives = 1   # 3 lives
 	start_mode("tconfirm")
-	mode.shoot(eye, Vector3.FORWARD)
 	await _wait(0.1)
 	mode.shoot(eye, Vector3.UP)
 	mode.shoot(eye, Vector3.UP)
@@ -698,7 +815,6 @@ func _tconfirm_lives_check() -> int:
 func _tconfirm_mixed_check() -> int:
 	Settings.tconf_speed = Defs.TRACK_SPEEDS.size()
 	start_mode("tconfirm")
-	mode.shoot(player.eye_position(), Vector3.FORWARD)   # the start target
 	await get_tree().process_frame
 	var allowed := Defs.TRACK_SPEEDS.map(func(s: Dictionary) -> float: return s["speed"])
 	var seen := {}
@@ -712,6 +828,103 @@ func _tconfirm_mixed_check() -> int:
 		seen.size(), ", ".join(PackedStringArray(seen.keys().map(func(v: float) -> String: return str(int(v))))),
 		"ja" if all_cs2 else "NEJ"])
 	return int(seen.size() < 3 or not all_cs2)
+
+
+## Click Timing: one shot per bot. A shot at the middle of the door while the bot is still on its way
+## is early by the time it needs to get there, and one after it passed is late; a shot at the head in
+## the door kills, and the gun then waits for the next bot; a bullet at the head through the wall
+## stops in the wall; and a bot nobody shot at counts as passed without a shot.
+func _timing_check() -> int:
+	Settings.timing_speed = 0   # 250 u/s
+	start_mode("timing")
+	var eye: Vector3 = player.eye_position()
+	var speed := 250.0 * Defs.UNIT
+	var errors: Array = mode.get("errors")
+	_timing_bot(-speed * 0.2)
+	mode.shoot(eye, _to_door_middle(eye))
+	var early_ms := roundi(float(errors[-1]) * 1000.0)
+	var held: bool = not mode.can_shoot()
+	mode.call("_bot_gone")
+	_timing_bot(speed * 0.1)
+	mode.shoot(eye, _to_door_middle(eye))
+	var late_ms := roundi(float(errors[-1]) * 1000.0)
+	mode.call("_bot_gone")
+	_timing_bot(0.0)
+	var bot: Node3D = mode.get("_dummy")
+	mode.shoot(eye, (bot.call("head_centre") - eye).normalized())
+	var killed: bool = mode.get("kills") == 1 and not mode.can_shoot()
+	_timing_bot(-2.0)
+	bot = mode.get("_dummy")
+	var through: Vector3 = (bot.call("head_centre") - eye).normalized()
+	mode.shoot(eye, through)
+	var wall_dist: float = mode.surface(eye, through).get("dist", -1.0)
+	var in_wall: bool = mode.get("kills") == 1 and absf(wall_dist - float(mode.get("_wall")) / -through.z) < 0.01
+	mode.call("_bot_gone")
+	_timing_bot(-speed * 0.3)
+	mode.call("_bot_gone")
+	var passed: bool = mode.get("no_shot") == 1 and mode.get("bots") == 5
+	var early_ok: bool = mode.get("early") == 1 and early_ms <= -170 and early_ms >= -230
+	var late_ok: bool = mode.get("late") == 1 and late_ms >= 70 and late_ms <= 130
+	var rows: int = (MODES["timing"].summary(_fake_result("timing"))["rows"] as Array).size()
+	print("[självtest] click timing: 0,2 s före mitten %d ms (för tidigt: %s), 0,1 s efter %+d ms (för sent: %s), ett skott per gubbe: %s, kill i dörren: %s, väggen stoppar kulan: %s, gubbe utan skott räknas: %s" % [
+		early_ms, "ja" if early_ok else "NEJ", late_ms, "ja" if late_ok else "NEJ", "ja" if held else "NEJ",
+		"ja" if killed else "NEJ", "ja" if in_wall else "NEJ", "ja" if passed else "NEJ"])
+	return int(not (early_ok and late_ok and held and killed and in_wall and passed and rows == 8))
+
+
+## Click Timing with counter-strafe: a shot without strafing first doesn't count, one fired at full
+## speed goes wide, and one right after a counter-strafe (D, then A until you're stopped) kills.
+func _timing_strafe_check() -> int:
+	Settings.timing_move = 1
+	start_mode("timing")
+	_timing_bot(0.0)
+	var eye: Vector3 = player.eye_position()
+	var bot: Node3D = mode.get("_dummy")
+	mode.shoot(eye, (bot.call("head_centre") - eye).normalized())
+	var still_ok: bool = mode.get("still_shots") == 1 and mode.get("kills") == 0
+	mode.call("_bot_gone")
+	mode.key_event("d", true, game_time())
+	await _wait(0.5)
+	_timing_bot(0.0)
+	eye = player.eye_position()
+	bot = mode.get("_dummy")
+	mode.shoot(eye, (bot.call("head_centre") - eye).normalized())
+	var moving_ok: bool = mode.get("moving_shots") == 1
+	mode.call("_bot_gone")
+	mode.key_event("d", false, game_time())
+	mode.key_event("a", true, game_time())
+	await _wait(0.1)
+	mode.key_event("a", false, game_time())
+	await _wait(0.05)
+	_timing_bot(0.0)
+	eye = player.eye_position()
+	bot = mode.get("_dummy")
+	var before: int = mode.get("kills")   # the shot on the move can hit by luck, like in CS2
+	mode.shoot(eye, (bot.call("head_centre") - eye).normalized())
+	var delays: Array = mode.get("stop_delays")
+	var stop_ms := roundi(float(delays[-1]) * 1000.0) if not delays.is_empty() else -1
+	var counter_ok: bool = mode.get("kills") == before + 1 and delays.size() == 1 and stop_ms >= 0 and stop_ms <= 120
+	var moved := eye.x
+	Settings.timing_move = 0
+	print("[självtest] click timing counter-strafe: skott utan strafe räknas inte: %s, skott i full fart sprids: %s, kill efter kontring: %s (%d ms efter stopp, %.1f m åt sidan, kills %d → %d)" % [
+		"ja" if still_ok else "NEJ", "ja" if moving_ok else "NEJ", "ja" if counter_ok else "NEJ", stop_ms, moved,
+		before, int(mode.get("kills"))])
+	return int(not (still_ok and moving_ok and counter_ok))
+
+
+## A Click Timing bot running towards +x, with its middle `x` meters from the middle of the door now.
+func _timing_bot(x: float) -> void:
+	mode.call("_spawn_bot", game_time())
+	mode.set("_side", 1.0)
+	mode.set("_x0", x)
+	mode.set("_t0", game_time())
+	mode.call("_place_bot", game_time())
+
+
+## From the eye to the middle of the door, at the height of the bot's head and on its path.
+func _to_door_middle(eye: Vector3) -> Vector3:
+	var head: Vector3 = mode.get("_dummy").call("head_centre")
+	return (Vector3(0.0, head.y, head.z) - eye).normalized()
 
 
 ## Strafe Aim: a shot on a target at full speed counts; one fired after stopping doesn't.
@@ -759,13 +972,17 @@ func _run_tour() -> void:
 	await _snap(dir, "03_stats_tconfirm")
 	stats_screen.show_tab("punch")
 	await _snap(dir, "03_stats_punch")
+	stats_screen.show_tab("timing")
+	await _snap(dir, "03_stats_timing")
 	stats_screen.show_tab("playlist")
 	await _snap(dir, "03_stats_playlist")
 	stats_screen.show_tab("grid")
 	start_mode("flick")
-	await _snap(dir, "04_flick_ring")
-	await _wait(1.0)
-	await _snap(dir, "04_flick_target")
+	await _snap(dir, "04_flick")
+	var heads: Array = mode.get("_targets")
+	_aim_at((heads[0]["node"] as Node3D).global_position)
+	_fire()
+	await _snap(dir, "04_flick_after_hit")
 	start_mode("confirm")
 	await _wait(0.3)
 	await _snap(dir, "05_confirm")
@@ -803,11 +1020,16 @@ func _run_tour() -> void:
 	await _crosshair_check(dir)
 	Settings.resolution = 0
 	Settings.apply()
+	# The countdown before a run (off elsewhere in the tour): the bot waits, then runs.
+	Settings.countdown = true
 	start_mode("track")
-	await _wait(1.0)
+	await _wait(1.2)
 	await _snap(dir, "10_track_countdown")
-	await _wait(2.5)
+	await _wait(1.85)
+	await _snap(dir, "10_track_go")
+	await _wait(1.5)
 	await _snap(dir, "10_track_running")
+	Settings.countdown = false
 	Settings.flick_target = 1
 	start_mode("flick")
 	await _wait(1.3)
@@ -861,9 +1083,7 @@ func _run_tour() -> void:
 	await _wait(0.4)
 	await _snap(dir, "15_grid")
 	start_mode("tconfirm")
-	await _wait(0.2)
-	mode.call("shoot", player.eye_position(), player.aim_dir())
-	await _wait(1.2)
+	await _wait(1.4)
 	await _snap(dir, "16_tconfirm")
 	# A shot straight at the bot's head must count as a kill; a shot into the air is a miss that
 	# keeps the run going.
@@ -875,14 +1095,12 @@ func _run_tour() -> void:
 	# On Hard the same miss starts over.
 	Settings.tconf_lives = 2
 	start_mode("tconfirm")
-	mode.call("shoot", eye, Vector3.FORWARD)
 	await _wait(0.6)
 	mode.call("shoot", eye, Vector3.UP)
 	await _snap(dir, "16_tconfirm_hard_miss")
 	# With 3 lives the first miss only costs one.
 	Settings.tconf_lives = 1
 	start_mode("tconfirm")
-	mode.call("shoot", eye, Vector3.FORWARD)
 	await _wait(0.6)
 	mode.call("shoot", eye, Vector3.UP)
 	await _wait(0.1)
@@ -925,16 +1143,22 @@ func _run_tour() -> void:
 	await _wait(0.8)
 	await _snap(dir, "24_spray")
 	Settings.ak_recoil = false
-	# Micro Adjustments: a target close to the crosshair; aiming straight at it and shooting must hit.
+	# Micro Adjustments: the flick first, then the first correction right next to where you hit it.
 	start_mode("micro")
 	await _wait(0.8)
-	await _snap(dir, "18_micro")
+	await _snap(dir, "18_micro_flick")
 	var micro_target: Node3D = mode.get("_target")
-	mode.call("shoot", eye, (micro_target.global_position - eye).normalized())
-	print("[micro] träff: %s, nästa mål efter paus: %s" % [mode.get("hits") == 1, mode.get("_target") == null])
-	# Aim Punch: the frame his first hit lands, his muzzle flash up close, and losing a duel.
+	_aim_at(micro_target.global_position)
+	mode.call("shoot", player.eye_position(), player.aim_dir())
+	await _snap(dir, "18_micro_correction")
+	# Aim Punch: the countdown under its message, the frame his first hit lands, his muzzle flash up
+	# close, and losing a duel.
+	Settings.countdown = true
 	start_mode("punch")
-	mode.shoot(player.eye_position(), Vector3.FORWARD)
+	await _wait(0.5)
+	await _snap(dir, "25_punch_countdown")
+	Settings.countdown = false
+	start_mode("punch")
 	while mode.get("hits_taken") == 0:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
@@ -963,6 +1187,45 @@ func _run_tour() -> void:
 	await _wait(0.6)
 	_fire()
 	await _snap(dir, "26_strafeaim_still")
+	# Click Timing: the door during the countdown, a bot crossing it, a shot too early through the
+	# door, and one into the wall beside it.
+	Settings.countdown = true
+	start_mode("timing")
+	await _wait(0.6)
+	await _snap(dir, "28_timing_countdown")
+	Settings.countdown = false
+	start_mode("timing")
+	await _wait(0.3)
+	var timing_speed := float(mode.get("max_speed")) * Defs.UNIT
+	_timing_bot(-timing_speed * 0.04)
+	await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(dir.path_join("28_timing_bot.png"))
+	_timing_bot(-timing_speed * 0.35)
+	_aim_at(player.eye_position() + _to_door_middle(player.eye_position()))
+	_fire()
+	print("[timing] för tidigt genom dörren: %s" % (mode.get("early") == 1))
+	await _wait(0.1)
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(dir.path_join("28_timing_early.png"))
+	_timing_bot(-timing_speed * 0.8)
+	var beside := Vector3(-1.4, player.eye_position().y, -float(mode.get("_wall")))
+	_aim_at(beside)
+	await _wait(0.12)   # the AK fires at most every 0.1 s
+	_fire()
+	await _wait(0.1)
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(dir.path_join("28_timing_wall.png"))
+	print("[timing] kulhål i väggen: %s" % ((impacts.get("_holes") as Array).size() == 2))
+	# With counter-strafe: the lane and the speed meter, at full speed to the right.
+	Settings.timing_move = 1
+	start_mode("timing")
+	await _wait(0.2)
+	mode.key_event("d", true, game_time())
+	await _wait(0.45)
+	await _snap(dir, "28_timing_strafe")
+	mode.key_event("d", false, game_time())
+	Settings.timing_move = 0
 	for id: String in Defs.PLAYLIST:
 		mode_id = id
 		_on_finished(_fake_result(id))
@@ -1142,17 +1405,18 @@ func _closeups(dir: String) -> void:
 	Settings.track_speed = 3
 	start_mode("track")
 	mode.dist = 3.2
-	await _wait(2.2)
+	await _wait(0.7)
 	await _snap(dir, "11_closeup_run_rifle")
 	await _wait(0.37)
 	await _snap(dir, "11_closeup_run_rifle_b")
 	Settings.track_speed = 0
 	start_mode("track")
 	mode.dist = 3.2
-	await _wait(2.4)
+	await _wait(0.9)
 	await _snap(dir, "11_closeup_run_knife")
-	# Crouching during the countdown, while the bot stands still: the head must drop about 17 units.
+	# Crouching while the bot stands still before the run: the head must drop about 17 units.
 	start_mode("track")
+	mode.run_start = INF   # held before the start, as during the countdown
 	mode.dist = 3.2
 	await _wait(0.4)
 	var standing: float = mode.dummy.head_centre().y
@@ -1375,13 +1639,14 @@ func _fake_history() -> void:
 		var stamp := Time.get_datetime_string_from_unix_time(now_local - days_ago * 86400 - (40 - i) * 600, true)
 		var p := i / 39.0
 		Stats.data["grid"].append({"variant": Defs.variant("grid", Settings), "score": roundi(70 + 18 * p + rng.randf_range(-5, 5)), "date": stamp})
-		Stats.data["flick"].append({"variant": Defs.variant("flick", Settings), "score": roundi(27 + 9 * p + rng.randf_range(-3, 3)), "date": stamp})
-		Stats.data["micro"].append({"variant": Defs.variant("micro", Settings), "score": roundi(48 + 14 * p + rng.randf_range(-4, 4)), "date": stamp})
+		Stats.data["flick"].append({"variant": Defs.variant("flick", Settings), "score": roundi(46 + 14 * p + rng.randf_range(-4, 4)), "date": stamp})
+		Stats.data["micro"].append({"variant": Defs.variant("micro", Settings), "score": roundi(52 + 14 * p + rng.randf_range(-4, 4)), "date": stamp})
 		Stats.data["confirm"].append({"variant": Defs.variant("confirm", Settings), "score": roundi(30 + 12 * p + rng.randf_range(-4, 4)), "date": stamp})
 		Stats.data["strafe"].append({"variant": Defs.variant("strafe", Settings), "score": roundi(1150 + 450 * p + rng.randf_range(-120, 120)), "date": stamp})
 		Stats.data["track"].append({"variant": Defs.variant("track", Settings), "score": roundi(2800 + 1500 * p + rng.randf_range(-300, 300)), "date": stamp})
 		Stats.data["tconfirm"].append({"variant": Defs.variant("tconfirm", Settings), "score": roundi(18 + 8 * p + rng.randf_range(-3, 3)), "date": stamp})
 		Stats.data["punch"].append({"variant": Defs.variant("punch", Settings), "score": roundi(24 + 9 * p + rng.randf_range(-3, 3)), "date": stamp})
+		Stats.data["timing"].append({"variant": Defs.variant("timing", Settings), "score": roundi(14 + 9 * p + rng.randf_range(-3, 3)), "date": stamp})
 		Stats.data["strafeaim"].append({"variant": Defs.variant("strafeaim", Settings), "score": roundi(44 + 14 * p + rng.randf_range(-4, 4)), "date": stamp})
 	for days_ago: int in [20, 17, 16, 12, 10, 9, 6, 5, 3, 2, 1]:
 		var results := {}
@@ -1397,8 +1662,8 @@ func _fake_result(id: String) -> Dictionary:
 			return {"variant": Defs.variant("grid", Settings), "score": 86, "hits": 86, "misses": 7,
 				"accuracy": 0.925, "avg_ms": 690.0}
 		"micro":
-			return {"variant": Defs.variant("micro", Settings), "score": 58, "hits": 58, "misses": 6,
-				"accuracy": 0.906, "avg_ms": 610.0, "directness": 0.81}
+			return {"variant": Defs.variant("micro", Settings), "score": 64, "hits": 64, "misses": 5,
+				"accuracy": 0.928, "flick_ms": 812.0, "micro_ms": 447.0, "directness": 0.81, "flick_bias": -0.06}
 		"tconfirm":
 			return {"variant": Defs.variant("tconfirm", Settings), "score": 24, "zone": "head", "shots": 31,
 				"misses": 5, "body_hits": 2, "accuracy": 0.774, "per_kill_ms": 2500.0}
@@ -1406,12 +1671,16 @@ func _fake_result(id: String) -> Dictionary:
 			return {"variant": Defs.variant("punch", Settings), "score": 31, "deaths": 6, "armor": 0, "zone": "head",
 				"shots": 52, "misses": 14, "body_hits": 7, "accuracy": 0.596, "kill_ms": 712.0, "recover_ms": 538.0,
 				"hits_taken": 58, "punched_shots": 19, "punched_kills": 4}
+		"timing":
+			return {"variant": Defs.variant("timing", Settings), "score": 19, "strafing": false, "bots": 34, "shots": 31,
+				"early": 4, "late": 6, "off_height": 2, "body_hits": 0, "no_shot": 3, "moving_shots": 0,
+				"still_shots": 0, "accuracy": 0.613, "off_ms": 21.0, "bias_ms": 9.0, "stop_ms": null}
 		"strafeaim":
 			return {"variant": Defs.variant("strafeaim", Settings), "score": 54, "hits": 54, "misses": 11,
 				"still_shots": 6, "accuracy": 0.831, "avg_ms": 1090.0, "avg_speed": 0.86}
 		"flick":
-			return {"variant": Defs.variant("flick", Settings), "score": 34, "targets": 38, "hits": 34,
-				"misses": 3, "timeouts": 2, "accuracy": 0.919, "avg_ms": 436.0, "flick_bias": 0.09}
+			return {"variant": Defs.variant("flick", Settings), "score": 58, "hits": 58,
+				"misses": 6, "accuracy": 0.906, "avg_ms": 1032.0, "flick_bias": 0.09}
 		"confirm":
 			return {"variant": Defs.variant("confirm", Settings), "score": 41, "per_target_ms": 1463.0, "attempts": 4}
 		"track":

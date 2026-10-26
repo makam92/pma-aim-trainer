@@ -1,5 +1,5 @@
 extends Control
-## Sensitivity, crosshair, bots, CS2 files, graphics and sound, and the weapon.
+## Sensitivity, crosshair, drills and bots, CS2 files, graphics and sound, and the weapon.
 
 signal back_requested
 
@@ -58,10 +58,12 @@ func _ready() -> void:
 	_row(ch, "Kontur", _check(Settings.crosshair_outline, "crosshair_outline"))
 	_row(ch, "Prick i mitten", _check(Settings.crosshair_dot, "crosshair_dot"))
 
-	left.add_child(_section("Gubbar"))
-	var bots := _grid()
-	left.add_child(bots)
-	_row(bots, "Crouch", UI.options(["Ibland, som i CS2", "Aldrig"], 0 if Settings.bot_crouch else 1,
+	left.add_child(_section("Övningar"))
+	var drills := _grid()
+	left.add_child(drills)
+	_row(drills, "Nedräkning före start", _check(Settings.countdown, "countdown"))
+	_row(drills, "Visa tid efter träff", _check(Settings.hit_times, "hit_times"))
+	_row(drills, "Gubbar crouchar", UI.options(["Ibland, som i CS2", "Aldrig"], 0 if Settings.bot_crouch else 1,
 			func(i: int) -> void: Settings.update("bot_crouch", i == 0)))
 	var bots_info := UI.label("Gubbarna i Tracking och Tracking Confirmation croucher ofta när de stannar och ibland mitt i ADAD. Crouchade går de i 34 % av maxfarten och huvudet sjunker 17 units.", 14, UI.DIM)
 	bots_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

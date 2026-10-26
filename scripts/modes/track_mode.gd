@@ -7,7 +7,6 @@ const Brain = preload("res://scripts/bot_brain.gd")
 const Dummy = preload("res://scripts/dummy.gd")
 const SpeedMeter = preload("res://scripts/ui/speed_meter.gd")
 
-const COUNTDOWN := 1.5
 const LANE_DEG := 25.0          # how far to each side the bot may go, seen from you
 const REACTION_WINDOW := 0.3    # seconds after the bot changes direction that count as "reaction"
 
@@ -61,9 +60,13 @@ func begin() -> void:
 	meter.title = "Gubbens fart"
 	meter.neutral = true
 	hud.add_widget(meter)
-	run_start = t + COUNTDOWN
+	run_start = INF    # the bot stands still until the run starts
 	_last_t = t
 	_update_hud()
+
+
+func go() -> void:
+	run_start = now()
 
 
 func _process(_delta: float) -> void:
@@ -75,8 +78,6 @@ func _process(_delta: float) -> void:
 	if not running and not done and t >= run_start:
 		running = true
 		brain.start(run_start)
-		hud.message("")
-		Sfx.play("start")
 	if running:
 		brain.update(t)
 	sim.advance(t)
@@ -92,8 +93,6 @@ func _process(_delta: float) -> void:
 		_measure(t, dt)
 		if t - run_start >= duration:
 			_finish()
-	elif not done:
-		hud.message("Sikta på gubben  ·  %d" % ceili((run_start - t) / 0.5), UI.TEXT)
 	_update_hud()
 
 

@@ -1,6 +1,6 @@
 extends "res://scripts/modes/mode_base.gd"
 ## Gridshot: three targets at a time on a 3×3 grid in front of you. Shoot them as fast as you can;
-## every hit brings up a new one in a free spot. Runs for 60 seconds from the first hit.
+## every hit brings up a new one in a free spot. Runs for 60 seconds.
 
 const Target = preload("res://scripts/target.gd")
 const HeadModel = preload("res://scripts/head_model.gd")
@@ -25,8 +25,12 @@ func begin() -> void:
 	duration = Defs.RUN_SECONDS
 	for i in ACTIVE:
 		_spawn()
-	hud.message("Skjut ett mål för att starta klockan", UI.DIM)
 	_update_hud()
+
+
+func go() -> void:
+	_run_start = now()
+	_last_hit = _run_start
 
 
 func _process(_delta: float) -> void:
@@ -56,11 +60,7 @@ func shoot(origin: Vector3, dir: Vector3) -> void:
 		_update_hud()
 		return
 	var t := now()
-	if _run_start < 0.0:
-		_run_start = t
-		hud.message("")
-	else:
-		times.append(t - _last_hit)
+	times.append(t - _last_hit)
 	_last_hit = t
 	hits += 1
 	shot_hit = true
