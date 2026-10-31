@@ -13,6 +13,8 @@ const NONE := Color(0.0, 0.0, 0.0, 0.0)
 const TARGET := Color(1.0, 0.28, 0.34)
 const START := Color(1.0, 0.75, 0.22)
 const BUTTON_STATES := ["normal", "hover", "pressed", "hover_pressed", "disabled"]
+const TAB_STATES := ["normal", "hover", "pressed", "hover_pressed"]
+const TAB_FONTS := ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color"]
 
 static var _bold: FontVariation
 
@@ -113,6 +115,17 @@ static func button(text: String, on_press: Callable, primary: bool = false) -> B
 		b.add_theme_font_override("font", bold())
 	b.pressed.connect(on_press)
 	return b
+
+
+## Styles a button as a tab, filled with the accent colour when it's the selected one.
+static func style_tab(b: Button, selected: bool) -> void:
+	for state: String in TAB_STATES:
+		b.add_theme_stylebox_override(state, box(ACCENT, 8, NONE, 14, 8) if selected else button_box(state, 14, 8))
+	for item: String in TAB_FONTS:
+		if selected:
+			b.add_theme_color_override(item, Color(0.09, 0.07, 0.03))
+		else:
+			b.remove_theme_color_override(item)
 
 
 static func options(items: Array, selected: int, on_select: Callable) -> OptionButton:

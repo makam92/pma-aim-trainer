@@ -1,11 +1,12 @@
 extends Control
-## Summary after the daily playlist: every exercise with its runs, the best one, and the change
-## since the previous playlist, plus how many days in a row it has been done.
+## Summary after a playlist: every exercise with its runs, the best one, and the change since the
+## previous time you did that playlist, plus how many days in a row you have.
 
 signal menu_requested
 
 const UI = preload("res://scripts/ui/ui_kit.gd")
 
+var _heading: Label
 var _streak: Label
 var _date: Label
 var _rows: GridContainer
@@ -22,7 +23,8 @@ func _ready() -> void:
 	center.add_child(panel)
 	var col := UI.vbox(10)
 	panel.add_child(col)
-	col.add_child(UI.label("DAGENS PASS KLART", 15, UI.ACCENT, true))
+	_heading = UI.label("", 15, UI.ACCENT, true)
+	col.add_child(_heading)
 	_streak = UI.label("", 48, UI.TEXT, true)
 	col.add_child(_streak)
 	_date = UI.label("", 15, UI.DIM)
@@ -41,8 +43,10 @@ func _ready() -> void:
 	col.add_child(buttons)
 
 
-## `results` (and the previous playlist's) map mode → {"scores", "variant", "best"}, or null if skipped.
-func show_summary(order: Array, titles: Dictionary, results: Dictionary, previous: Variant, streak: int) -> void:
+## `results` (and the previous run's of the same playlist) map mode → {"scores", "variant", "best"},
+## or null if skipped.
+func show_summary(title: String, order: Array, titles: Dictionary, results: Dictionary, previous: Variant, streak: int) -> void:
+	_heading.text = "%s KLART" % title.to_upper()
 	_streak.text = "%d %s i rad" % [streak, "dag" if streak == 1 else "dagar"]
 	_date.text = Time.get_date_string_from_system()
 	var before: Dictionary = previous.get("results", {}) if previous is Dictionary else {}

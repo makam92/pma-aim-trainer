@@ -1,6 +1,6 @@
 extends Control
 ## Progress over time: a tab per exercise with a chart of every run, the trend over the last week
-## and the latest runs, plus a tab for the daily playlist with a calendar of training days.
+## and the latest runs, plus a tab for the playlists with a calendar of the days each was done.
 
 signal back_requested
 
@@ -11,15 +11,15 @@ const TABS := [
 	["grid", "Gridshot"], ["flick", "Flicks"], ["micro", "Micro Adjustments"], ["track", "Tracking"], ["confirm", "Target Confirmation"],
 	["tconfirm", "Tracking Confirmation"], ["punch", "Aim Punch"], ["timing", "Click Timing"], ["strafeaim", "Strafe Aim"],
 	["strafe", "Counter-strafe"],
-	["playlist", "Dagens pass"],
+	["playlist", "Pass"],
 ]
 const MONTHS := ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
 const WEEKDAYS := ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
 const DAY := 86400
-const TAB_STATES := ["normal", "hover", "pressed", "hover_pressed"]
-const TAB_FONTS := ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color"]
 
 var _tab := "grid"
+## The playlist shown on the playlist tab; it starts at the one picked in the menu.
+var _pass := ""
 var _all_variants := false
 var _tab_buttons := {}
 var _content: VBoxContainer
@@ -55,9 +55,15 @@ func _ready() -> void:
 	col.add_child(buttons)
 
 
+func _notification(what: int) -> void:
+	# Each time the screen opens, the playlist tab starts at the playlist picked in the menu.
+	if what == NOTIFICATION_VISIBILITY_CHANGED and visible:
+		_pass = ""
+
+
 func refresh() -> void:
 	for id: String in _tab_buttons:
-		_style_tab(_tab_buttons[id], id == _tab)
+		UI.style_tab(_tab_buttons[id], id == _tab)
 	UI.clear(_content)
 	if _tab == "playlist":
 		_build_playlist()
@@ -129,11 +135,29 @@ func _build_mode(mode: String) -> void:
 	_content.add_child(facts)
 
 
+## One playlist at a time, picked with a tab when you have more than the daily one: its streak,
+## a calendar of the days it was done and its latest runs.
 func _build_playlist() -> void:
-	var entries: Array = Stats.data["playlist"]
-	var streak := Stats.playlist_streak()
+	var ids := Settings.playlist_ids()
+	if not ids.has(_pass):
+		_pass = Settings.selected_playlist()
+	if ids.size() > 1:
+		var picker := HFlowContainer.new()
+		picker.add_theme_constant_override("h_separation", 8)
+		picker.add_theme_constant_override("v_separation", 8)
+		for id: String in ids:
+			var b := UI.button(Settings.playlist_name(id), func() -> void:
+				_pass = id
+				refresh.call_deferred())
+			b.add_theme_font_size_override("font_size", 15)
+			UI.style_tab(b, id == _pass)
+			picker.add_child(b)
+		_content.add_child(picker)
+	var title := Settings.playlist_name(_pass)
+	var entries := Stats.playlist_history(_pass)
+	var streak := Stats.playlist_streak(_pass)
 	var head := UI.vbox(2)
-	head.add_child(UI.label("Dagens pass", 26, UI.ACCENT, true))
+	head.add_child(UI.label(title, 26, UI.ACCENT, true))
 	head.add_child(UI.label("%d %s i rad  ·  %d pass totalt" % [streak, "dag" if streak == 1 else "dagar", entries.size()], 16, UI.TEXT, true))
 	_content.add_child(head)
 
@@ -145,17 +169,19 @@ func _build_playlist() -> void:
 	var latest := entries.slice(-8)
 	latest.reverse()
 	if latest.is_empty():
-		recent.add_child(UI.label("Inga pass än. Starta Dagens pass från menyn.", 15, UI.DIM))
+		recent.add_child(UI.label("Inga pass än. Starta %s från menyn." % title, 15, UI.DIM))
 	else:
 		recent.add_child(_playlist_table(latest))
 	row.add_child(recent)
 	_content.add_child(row)
 
 
-## One row per playlist with the best round of each exercise; "–" where it was skipped or
-## didn't exist yet.
+## One row per playlist with the best round of each exercise in it; "–" where it was skipped or
+## didn't exist yet. Exercises none of these runs had get no column.
 func _playlist_table(entries: Array) -> Control:
-	var modes := TABS.filter(func(tab: Array) -> bool: return tab[0] != "playlist")
+	var modes := TABS.filter(func(tab: Array) -> bool:
+		return tab[0] != "playlist" and entries.any(func(entry: Dictionary) -> bool:
+			return (entry.get("results", {}) as Dictionary).has(tab[0])))
 	var table := GridContainer.new()
 	table.columns = modes.size() + 1
 	table.add_theme_constant_override("h_separation", 14)
@@ -220,16 +246,6 @@ func _fact(title: String, value: String, color: Color) -> Control:
 	v.add_child(UI.label(title, 13, UI.DIM, true))
 	v.add_child(UI.label(value, 22, color, true))
 	return v
-
-
-func _style_tab(b: Button, selected: bool) -> void:
-	for state: String in TAB_STATES:
-		b.add_theme_stylebox_override(state, UI.box(UI.ACCENT, 8, UI.NONE, 14, 8) if selected else UI.button_box(state, 14, 8))
-	for item: String in TAB_FONTS:
-		if selected:
-			b.add_theme_color_override(item, Color(0.09, 0.07, 0.03))
-		else:
-			b.remove_theme_color_override(item)
 
 
 func _title(mode: String) -> String:

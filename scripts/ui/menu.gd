@@ -1,9 +1,11 @@
 extends Control
-## Main menu: the daily playlist and one card per training mode, plus settings, stats and quit.
+## Main menu: the playlists and one card per training mode, plus settings, stats and quit.
 
 signal start_requested(mode_id: String)
+## Start or edit the playlist picked with the tabs (Settings.playlist_selected), or make a new one.
 signal playlist_requested
 signal playlist_edit_requested
+signal playlist_new_requested
 signal settings_requested
 signal stats_requested
 signal quit_requested
@@ -71,6 +73,9 @@ const CARDS := [
 
 var _pb_labels := {}
 var _sens_label: Label
+var _playlist_tabs: HFlowContainer
+var _tab_buttons := {}      # playlist id → its tab
+var _tabs_made_for := ""    # the playlists and names the tabs were made for
 var _playlist_status: Label
 var _playlist_text: Label
 var _playlist_total: Label
@@ -86,7 +91,7 @@ func _ready() -> void:
 	var col := UI.vbox(22)
 	center.add_child(col)
 
-	# The title, with the daily playlist beside it; the exercises in a grid below.
+	# The title, with the playlists beside it; the exercises in a grid below.
 	var top := UI.hbox(24)
 	var head := UI.vbox(2)
 	head.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -126,18 +131,27 @@ func refresh() -> void:
 	for id: String in _pb_labels:
 		var best: Variant = Stats.best(id, Defs.variant(id, Settings))
 		_pb_labels[id].text = "Personbästa: " + (UI.main_value(id, best) if best != null else "–")
+	var selected := Settings.selected_playlist()
+	var made_for := ""
+	for id: String in Settings.playlist_ids():
+		made_for += "%s=%s;" % [id, Settings.playlist_name(id)]
+	if made_for != _tabs_made_for:
+		_tabs_made_for = made_for
+		_build_tabs()
+	for id: String in _tab_buttons:
+		UI.style_tab(_tab_buttons[id], id == selected)
 	var parts: Array[String] = []
 	var rounds := 0
-	for entry: Array in Settings.playlist_entries():
+	for entry: Array in Settings.playlist_entries(selected):
 		if entry[1] > 0:
 			parts.append("%s ×%d" % [_title(entry[0]), entry[1]])
 			rounds += entry[1]
 	_playlist_text.text = " · ".join(parts) if rounds > 0 else "Inga övningar valda. Välj rundor under Ändra."
 	_playlist_total.text = "%s  ·  %s" % [UI.rounds_text(rounds), UI.playlist_time(rounds)] if rounds > 0 else ""
 	_playlist_start.disabled = rounds == 0
-	var streak := Stats.playlist_streak()
+	var streak := Stats.playlist_streak(selected)
 	var streak_text := "%d %s i rad" % [streak, "dag" if streak == 1 else "dagar"] if streak > 0 else "Ingen svit än"
-	if Stats.played_playlist_today():
+	if Stats.played_playlist_today(selected):
 		_playlist_status.text = "Klart idag  ·  " + streak_text
 		_playlist_status.add_theme_color_override("font_color", UI.GOOD)
 	else:
@@ -145,29 +159,30 @@ func refresh() -> void:
 		_playlist_status.add_theme_color_override("font_color", UI.DIM)
 
 
-## The daily playlist as the first card: what's in it, how long it takes and the streak.
-## The daily playlist as a wide panel: what's in it on the left, its length and buttons on the right.
+## The playlists as a wide panel: a tab per playlist and what the picked one holds on the left; its
+## status, length and buttons on the right.
 func _playlist_card() -> Control:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(PLAYLIST_WIDTH, 0)
 	panel.add_theme_stylebox_override("panel", UI.box(Color(0.1, 0.09, 0.06, 0.96), 14, Color(UI.ACCENT, 0.45), CARD_PADDING, 16))
 	var row := UI.hbox(24)
 	panel.add_child(row)
-	var v := UI.vbox(6)
+	var v := UI.vbox(10)
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(v)
-	var heading := UI.hbox(14)
-	heading.add_child(UI.label("Dagens pass", 24, UI.ACCENT, true))
-	_playlist_status = UI.label("", 16, UI.DIM, true)
-	_playlist_status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	heading.add_child(_playlist_status)
-	v.add_child(heading)
+	_playlist_tabs = HFlowContainer.new()
+	_playlist_tabs.add_theme_constant_override("h_separation", 8)
+	_playlist_tabs.add_theme_constant_override("v_separation", 8)
+	v.add_child(_playlist_tabs)
 	_playlist_text = UI.label("", 15, UI.DIM)
 	_playlist_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_playlist_text.custom_minimum_size = Vector2(PLAYLIST_WIDTH - 360.0, 0)
 	v.add_child(_playlist_text)
-	var side := UI.vbox(10)
+	var side := UI.vbox(8)
 	side.alignment = BoxContainer.ALIGNMENT_CENTER
+	_playlist_status = UI.label("", 15, UI.DIM, true)
+	_playlist_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	side.add_child(_playlist_status)
 	_playlist_total = UI.label("", 15, UI.TEXT, true)
 	_playlist_total.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	side.add_child(_playlist_total)
@@ -179,6 +194,23 @@ func _playlist_card() -> Control:
 	side.add_child(buttons)
 	row.add_child(side)
 	return panel
+
+
+## A tab per playlist, then a button for a new one while there's room.
+func _build_tabs() -> void:
+	UI.clear(_playlist_tabs)
+	_tab_buttons.clear()
+	for id: String in Settings.playlist_ids():
+		var tab := UI.button(Settings.playlist_name(id), func() -> void: Settings.update("playlist_selected", id))
+		tab.add_theme_font_size_override("font_size", 17)
+		_tab_buttons[id] = tab
+		_playlist_tabs.add_child(tab)
+	if Settings.playlists.size() < Defs.MAX_OWN_PLAYLISTS:
+		# Deferred: making the playlist rebuilds these tabs, this button included.
+		var add := UI.button("+  Nytt pass", func() -> void: playlist_new_requested.emit.call_deferred())
+		add.add_theme_font_size_override("font_size", 17)
+		UI.style_tab(add, false)
+		_playlist_tabs.add_child(add)
 
 
 func _card(card: Dictionary) -> Control:

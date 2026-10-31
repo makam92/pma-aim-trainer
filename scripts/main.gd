@@ -69,6 +69,9 @@ var view_camera: Camera3D
 ## The playlist's runs in order (a mode id per run), and the position in it, or -1 outside it.
 var _steps: Array = []
 var _playlist_index := -1
+## Which playlist is running (Defs.DAILY_PLAYLIST or one of your own), and its name.
+var _playlist_id := Defs.DAILY_PLAYLIST
+var _playlist_title := ""
 ## step → {"score", "variant", "best"} for each finished run.
 var _playlist_runs := {}
 
@@ -137,7 +140,8 @@ func _ready() -> void:
 
 	menu.start_requested.connect(start_mode)
 	menu.playlist_requested.connect(start_playlist)
-	menu.playlist_edit_requested.connect(func() -> void: _show(playlist_editor))
+	menu.playlist_edit_requested.connect(_edit_playlist)
+	menu.playlist_new_requested.connect(_new_playlist)
 	menu.settings_requested.connect(func() -> void: _show(settings_screen))
 	menu.stats_requested.connect(func() -> void: _show(stats_screen))
 	menu.quit_requested.connect(func() -> void: get_tree().quit())
@@ -264,7 +268,7 @@ func start_mode(id: String) -> void:
 	player.reset()
 	hud.visible = true
 	if _playlist_index >= 0:
-		hud.set_note("DAGENS PASS  %d/%d  ·  %s" % [_playlist_index + 1, _steps.size(), _step_name(_playlist_index)])
+		hud.set_note("%s  %d/%d  ·  %s" % [_playlist_title.to_upper(), _playlist_index + 1, _steps.size(), _step_name(_playlist_index)])
 	crosshair.visible = true
 	viewmodel.set_active(true)
 	viewmodel.deploy()
@@ -329,7 +333,7 @@ func _pause() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	pause_screen.set_playlist(_playlist_index >= 0)
 	if _playlist_index >= 0:
-		pause_screen.show_playlist(_steps, _playlist_index, _playlist_runs, MODE_TITLES)
+		pause_screen.show_playlist(_playlist_title, _steps, _playlist_index, _playlist_runs, MODE_TITLES)
 	_show(pause_screen)
 
 
@@ -430,7 +434,7 @@ func _on_finished(result: Dictionary) -> void:
 	if _playlist_index >= 0:
 		# Running a run again (R) replaces its result.
 		_playlist_runs[_playlist_index] = {"score": result.get("score", 0), "variant": variant, "best": is_best and previous != null}
-		title = "Dagens pass %d/%d  ·  %s" % [_playlist_index + 1, _steps.size(), _step_name(_playlist_index)]
+		title = "%s %d/%d  ·  %s" % [_playlist_title, _playlist_index + 1, _steps.size(), _step_name(_playlist_index)]
 		if _playlist_index + 1 < _steps.size():
 			next_label = "Nästa: %s  (Enter)" % _step_name(_playlist_index + 1)
 		else:
@@ -439,9 +443,12 @@ func _on_finished(result: Dictionary) -> void:
 	_show(results_screen)
 
 
-func start_playlist() -> void:
+## Starts a playlist from its first round: the one picked in the menu unless `id` says otherwise.
+func start_playlist(id: String = "") -> void:
+	_playlist_id = id if id != "" else Settings.selected_playlist()
+	_playlist_title = Settings.playlist_name(_playlist_id)
 	_steps = []
-	for entry: Array in Settings.playlist_entries():
+	for entry: Array in Settings.playlist_entries(_playlist_id):
 		for i in entry[1]:
 			_steps.append(entry[0])
 	if _steps.is_empty():
@@ -449,6 +456,17 @@ func start_playlist() -> void:
 	_playlist_runs = {}
 	_playlist_index = 0
 	start_mode(_steps[0])
+
+
+## Opens the editor for the playlist picked in the menu; a new one has its name ready to type over.
+func _edit_playlist(is_new: bool = false) -> void:
+	playlist_editor.edit(Settings.selected_playlist(), is_new)
+	_show(playlist_editor)
+
+
+func _new_playlist() -> void:
+	if Settings.add_playlist() != "":
+		_edit_playlist(true)
 
 
 ## "Tracking 2/3": the mode of a playlist step and which of its runs it is.
@@ -506,8 +524,8 @@ func _finish_playlist() -> void:
 				variant = run["variant"]
 				best = best or run["best"]
 		results[id] = {"scores": scores, "variant": variant, "best": best} if not scores.is_empty() else null
-	var previous: Variant = Stats.last_playlist()
-	Stats.add_playlist(results)
+	var previous: Variant = Stats.last_playlist(_playlist_id)
+	Stats.add_playlist(_playlist_id, _playlist_title, results)
 	_playlist_index = -1
 	_end_mode()
 	state = State.MENU
@@ -517,7 +535,7 @@ func _finish_playlist() -> void:
 	crosshair.visible = false
 	viewmodel.set_active(false)
 	player.reset()
-	playlist_screen.show_summary(order, MODE_TITLES, results, previous, Stats.playlist_streak())
+	playlist_screen.show_summary(_playlist_title, order, MODE_TITLES, results, previous, Stats.playlist_streak(_playlist_id))
 	_show(playlist_screen)
 
 
@@ -657,11 +675,41 @@ func _self_test() -> void:
 		failures += 1
 	# A check that stops on a script error returns nothing, and counts as failed.
 	for check: Callable in [_countdown_check, _flick_check, _micro_check, _punch_check, _strafeaim_check,
-			_tconfirm_lives_check, _tconfirm_mixed_check, _timing_check, _timing_strafe_check]:
+			_tconfirm_lives_check, _tconfirm_mixed_check, _timing_check, _timing_strafe_check, _playlist_check]:
 		var result: Variant = await check.call()
 		failures += 1 if result == null else int(result)
 	print("OK" if failures == 0 else "FEL: %d" % failures)
 	get_tree().quit(failures)
+
+
+## A playlist of your own: a new one gets a free name and is picked in the menu, runs only its own
+## rounds under its own name, and when it's done it's saved under its own id, not as the daily
+## playlist. Removing it picks the daily playlist again.
+func _playlist_check() -> int:
+	var daily_before := Stats.playlist_history(Defs.DAILY_PLAYLIST).size()
+	var id := Settings.add_playlist()
+	var picked := Settings.selected_playlist() == id and Settings.playlist_name(id) == "Eget pass"
+	Settings.rename_playlist(id, "Warmup")
+	Settings.set_playlist_entries(id, [["flick", 1], ["grid", 2]])
+	start_playlist()
+	var steps := ", ".join(PackedStringArray(_steps))
+	var note_label: Label = hud.get("_note")
+	var note := note_label.text
+	for step in _steps.size():
+		_playlist_runs[step] = {"score": 20 + step, "variant": Defs.variant(_steps[step], Settings), "best": false}
+	_playlist_index = _steps.size() - 1
+	_playlist_next()
+	var saved: Dictionary = Stats.data["playlist"][-1]
+	var counted := Stats.played_playlist_today(id) and Stats.playlist_streak(id) == 1 \
+		and Stats.playlist_history(Defs.DAILY_PLAYLIST).size() == daily_before
+	Settings.remove_playlist(id)
+	var back := Settings.selected_playlist() == Defs.DAILY_PLAYLIST and not Settings.playlist_ids().has(id)
+	print("[självtest] eget pass: valt %s, rundor %s, \"%s\", sparat som %s, räknas för sig: %s, borttaget: %s" % [
+		"ja" if picked else "NEJ", steps, note, saved.get("name", "?"), "ja" if counted else "NEJ", "ja" if back else "NEJ"])
+	show_menu()
+	var ok: bool = picked and steps == "flick, grid, grid" and note.begins_with("WARMUP  1/3") and saved.get("id") == id \
+		and saved.get("name") == "Warmup" and counted and back
+	return int(not ok)
 
 
 ## The countdown: 3, 2, 1, and only then does the run start; a shot before that doesn't count, one
@@ -1058,9 +1106,9 @@ func _run_tour() -> void:
 	await _snap(dir, "13_playlist_summary")
 	show_menu()
 	await _snap(dir, "13_menu_after_playlist")
-	# Your own playlist: Counter-strafe once, then Gridshot twice; the rest skipped.
+	# The daily playlist your own way: Counter-strafe once, then Gridshot twice; the rest skipped.
 	Settings.update("playlist", [["strafe", 1], ["grid", 2], ["flick", 0]])
-	_show(playlist_editor)
+	_edit_playlist()
 	await _snap(dir, "17_playlist_editor")
 	show_menu()
 	await _snap(dir, "17_menu_own_playlist")
@@ -1079,6 +1127,37 @@ func _run_tour() -> void:
 	_playlist_jump(first_tracking)
 	print("[pass] hopp till Tracking 1/3: %s" % (mode_id == "track" and _playlist_index == first_tracking and state == State.PLAYING))
 	show_menu()
+	# A playlist of your own beside the daily one, a short warmup: its tab, editor, summary and
+	# statistics.
+	var warmup := Settings.add_playlist()
+	Settings.rename_playlist(warmup, "Warmup")
+	Settings.set_playlist_entries(warmup, [["grid", 1], ["flick", 1], ["micro", 1], ["track", 1]])
+	_edit_playlist()
+	await _snap(dir, "18_playlist_editor_own")
+	show_menu()
+	await _snap(dir, "18_menu_own_playlists")
+	start_playlist()
+	print("[pass] warmup: %s" % ", ".join(PackedStringArray(_steps)))
+	for step in _steps.size():
+		var fake := _fake_result(_steps[step])
+		_playlist_runs[step] = {"score": fake["score"], "variant": fake["variant"], "best": step == 1}
+	_playlist_index = _steps.size() - 1
+	_playlist_next()
+	await _snap(dir, "18_playlist_own_summary")
+	_show(stats_screen)
+	stats_screen.show_tab("playlist")
+	await _snap(dir, "18_stats_playlist_own")
+	Settings.remove_playlist(warmup)
+	print("[pass] warmup borttaget, valt: %s" % Settings.selected_playlist())
+	show_menu()
+	# A new playlist from the menu opens with its name selected, ready to type over; removing it
+	# takes two clicks.
+	_new_playlist()
+	await _snap(dir, "18_playlist_new")
+	playlist_editor.call("_on_remove")
+	await _snap(dir, "18_playlist_remove_confirm")
+	playlist_editor.call("_on_remove")
+	print("[pass] nytt pass borttaget efter två klick: %s, tillbaka i menyn: %s" % [Settings.playlists.is_empty(), menu.visible])
 	start_mode("grid")
 	await _wait(0.4)
 	await _snap(dir, "15_grid")

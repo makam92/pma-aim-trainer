@@ -1,6 +1,7 @@
 extends Control
-## Your own daily playlist: how many rounds of each exercise (none skips it) and in which order.
-## Every change is saved straight away; the exercises use the settings on their menu cards.
+## Editing a playlist: how many rounds of each exercise (none skips it) and in which order, and the
+## name of one of your own. Every change is saved straight away; the exercises use the settings on
+## their menu cards.
 
 signal back_requested
 
@@ -8,13 +9,21 @@ const UI = preload("res://scripts/ui/ui_kit.gd")
 const Defs = preload("res://scripts/defs.gd")
 const UP_ICON := '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"><path d="M4 11.5L9 6.5l5 5" fill="none" stroke="#ebedf2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 const DOWN_ICON := '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"><path d="M4 6.5l5 5 5-5" fill="none" stroke="#ebedf2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+const INTRO := "%s hur många rundor du vill köra av varje övning och i vilken ordning. Övningar utan rundor hoppas över. Inställningarna tas från korten i menyn."
 
 ## Mode id → title; set before the screen enters the tree.
 var titles := {}
 
+var _id := Defs.DAILY_PLAYLIST
+var _heading: Label
+var _name: LineEdit
+var _intro: Label
 var _list: VBoxContainer
 var _rows := {}              # mode id → the row's controls
 var _total: Label
+var _reset: Button
+var _remove: Button
+var _confirm_remove := false
 
 
 func _ready() -> void:
@@ -28,11 +37,24 @@ func _ready() -> void:
 	center.add_child(panel)
 	var col := UI.vbox(14)
 	panel.add_child(col)
-	col.add_child(UI.label("DAGENS PASS", 28, UI.TEXT, true))
-	var intro := UI.label("Välj hur många rundor du vill köra av varje övning och i vilken ordning. Övningar utan rundor hoppas över. Inställningarna tas från korten i menyn.", 15, UI.DIM)
-	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	intro.custom_minimum_size = Vector2(952, 0)
-	col.add_child(intro)
+	_heading = UI.label("DAGENS PASS", 28, UI.TEXT, true)
+	col.add_child(_heading)
+	_name = LineEdit.new()
+	_name.max_length = Defs.PLAYLIST_NAME_MAX
+	_name.placeholder_text = "Namn på passet"
+	_name.add_theme_font_size_override("font_size", 24)
+	_name.add_theme_font_override("font", UI.bold())
+	_name.custom_minimum_size = Vector2(460, 0)
+	_name.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_name.text_changed.connect(func(text: String) -> void:
+		_confirm_remove = false
+		Settings.rename_playlist(_id, text))
+	_name.text_submitted.connect(func(_text: String) -> void: _name.release_focus())
+	col.add_child(_name)
+	_intro = UI.label("", 15, UI.DIM)
+	_intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_intro.custom_minimum_size = Vector2(952, 0)
+	col.add_child(_intro)
 	_list = UI.vbox(8)
 	col.add_child(_list)
 	var up := UI.svg_icon(UP_ICON)
@@ -46,14 +68,41 @@ func _ready() -> void:
 	_total.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_total.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	footer.add_child(_total)
-	footer.add_child(UI.button("Återställ", func() -> void: Settings.update("playlist", [])))
+	_reset = UI.button("Återställ", func() -> void: Settings.update("playlist", []))
+	footer.add_child(_reset)
+	_remove = UI.button("Ta bort passet", _on_remove)
+	footer.add_child(_remove)
 	footer.add_child(UI.button("Klar  (Esc)", func() -> void: back_requested.emit(), true))
 	col.add_child(footer)
 	Settings.changed.connect(refresh)
 
 
+## Which playlist to edit. A new one has its name selected, ready to type over.
+func edit(id: String, is_new: bool = false) -> void:
+	_id = id
+	_confirm_remove = false
+	_name.text = Settings.playlist_name(id) if id != Defs.DAILY_PLAYLIST else ""
+	if is_new:
+		_name.grab_focus.call_deferred()
+		_name.select_all.call_deferred()
+
+
 func refresh() -> void:
-	var entries := Settings.playlist_entries()
+	# The daily playlist has a fixed name and can be reset to the standard one; your own can be
+	# renamed and removed.
+	var own := _id != Defs.DAILY_PLAYLIST
+	_heading.visible = not own
+	_name.visible = own
+	_intro.text = INTRO % ("Ge passet ett namn och välj" if own else "Välj")
+	_reset.visible = not own
+	_remove.visible = own
+	_remove.text = "Ta bort? Klicka igen" if _confirm_remove else "Ta bort passet"
+	for item: String in ["font_color", "font_hover_color"]:
+		if _confirm_remove:
+			_remove.add_theme_color_override(item, UI.BAD)
+		else:
+			_remove.remove_theme_color_override(item)
+	var entries := Settings.playlist_entries(_id)
 	var place := 0
 	var rounds := 0
 	for i in entries.size():
@@ -128,16 +177,18 @@ func _small_button(text: String, icon: Texture2D, on_press: Callable) -> Button:
 
 
 func _change(id: String, delta: int) -> void:
-	var entries := Settings.playlist_entries()
+	_confirm_remove = false
+	var entries := Settings.playlist_entries(_id)
 	for entry: Array in entries:
 		if entry[0] == id:
 			entry[1] = clampi(entry[1] + delta, 0, Defs.PLAYLIST_MAX_REPS)
-	Settings.update("playlist", entries)
+	Settings.set_playlist_entries(_id, entries)
 
 
 ## Swaps the exercise with its neighbour above (-1) or below (+1).
 func _move(id: String, step: int) -> void:
-	var entries := Settings.playlist_entries()
+	_confirm_remove = false
+	var entries := Settings.playlist_entries(_id)
 	var i := entries.find_custom(func(entry: Array) -> bool: return entry[0] == id)
 	var j := i + step
 	if i < 0 or j < 0 or j >= entries.size():
@@ -145,4 +196,18 @@ func _move(id: String, step: int) -> void:
 	var moved: Array = entries[i]
 	entries[i] = entries[j]
 	entries[j] = moved
-	Settings.update("playlist", entries)
+	Settings.set_playlist_entries(_id, entries)
+
+
+## Two clicks: the first asks, the second removes the playlist and goes back to the menu. Its
+## finished runs stay in the statistics.
+func _on_remove() -> void:
+	if not _confirm_remove:
+		_confirm_remove = true
+		refresh()
+		return
+	var gone := _id
+	_id = Defs.DAILY_PLAYLIST
+	_confirm_remove = false
+	Settings.remove_playlist(gone)
+	back_requested.emit()

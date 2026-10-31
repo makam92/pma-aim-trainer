@@ -51,10 +51,13 @@ ibland mitt i ADAD. Crouchade går de i 34 % av maxfarten (85 u/s med kniv) och 
 17 units. Det går att stänga av under Inställningar → Övningar.
 
 **Dagens pass** kör som standard alla tio lägena tre gånger var (cirka 36 minuter). Med **Ändra**
-väljer du själv hur många rundor av varje övning (0–5) och i vilken ordning. Trycker du Esc under
-passet visas hela passet bredvid pausmenyn, och du kan hoppa till vilken runda som helst. Efteråt
-visas en sammanfattning mot förra passet och hur många dagar i rad du tränat. **Statistik** har en
-graf per läge med alla rundor och trenden mot veckan innan, och en kalender över dina pass.
+väljer du själv hur många rundor av varje övning (0–5) och i vilken ordning. Med **+ Nytt pass** gör
+du egna pass bredvid, till exempel en kort warmup: ge passet ett namn och välj övningar och rundor på
+samma sätt. Varje pass får en egen flik i menyn (upp till fyra egna). Trycker du Esc under ett pass
+visas hela passet bredvid pausmenyn, och du kan hoppa till vilken runda som helst. Efteråt visas en
+sammanfattning mot förra gången du körde samma pass och hur många dagar i rad du kört det.
+**Statistik** har en graf per läge med alla rundor och trenden mot veckan innan, och en kalender per
+pass.
 
 Träffar räknas med CS2:s egna hitboxar (kapslar per ben med CS2:s hit groups: bara huvudet ger
 huvudträff, halsen räknas som kropp), och kulan träffar den hitbox den når först, som i CS2.

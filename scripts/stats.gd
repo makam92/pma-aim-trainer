@@ -1,6 +1,7 @@
 extends Node
 ## Finished runs per mode, saved to user://stats.json.
 
+const Defs = preload("res://scripts/defs.gd")
 const PATH := "user://stats.json"
 const MAX_PER_MODE := 500
 ## The headline number of each mode and whether higher is better.
@@ -17,9 +18,10 @@ const RANKING := {
 	"strafeaim": {"key": "score", "higher": true},
 }
 
-## Runs per mode, plus "playlist": finished daily playlists as
-## {"date", "results": {mode: {"scores", "variant", "best"} or null when skipped}}; modes that
-## weren't in that playlist are left out.
+## Runs per mode, plus "playlist": finished playlists as {"date", "id", "name",
+## "results": {mode: {"scores", "variant", "best"} or null when skipped}}; modes that weren't in
+## that playlist are left out. Those from before there were several playlists have no id: they're
+## the daily one.
 var data := {"grid": [], "flick": [], "micro": [], "confirm": [], "strafe": [], "track": [], "tconfirm": [], "punch": [], "timing": [],
 	"strafeaim": [], "playlist": []}
 ## Off during the screenshot tour so fake results never reach disk.
@@ -71,25 +73,32 @@ func history(mode: String, variant: String = "") -> Array:
 	return data[mode].filter(func(r: Dictionary) -> bool: return r.get("variant", "") == variant)
 
 
-func add_playlist(results: Dictionary) -> void:
-	data["playlist"].append({"date": Time.get_datetime_string_from_system(false, true), "results": results})
+func add_playlist(id: String, title: String, results: Dictionary) -> void:
+	data["playlist"].append({"date": Time.get_datetime_string_from_system(false, true), "id": id, "name": title,
+		"results": results})
 	_save()
 
 
-## The most recent finished playlist, or null.
-func last_playlist() -> Variant:
-	var list: Array = data["playlist"]
+## One playlist's finished runs, oldest first.
+func playlist_history(id: String) -> Array:
+	return data["playlist"].filter(func(entry: Dictionary) -> bool:
+		return str(entry.get("id", Defs.DAILY_PLAYLIST)) == id)
+
+
+## The playlist's most recent finished run, or null.
+func last_playlist(id: String) -> Variant:
+	var list := playlist_history(id)
 	return list[-1] if not list.is_empty() else null
 
 
-func played_playlist_today() -> bool:
-	return _playlist_days().has(_local_day(0))
+func played_playlist_today(id: String) -> bool:
+	return _playlist_days(id).has(_local_day(0))
 
 
-## Days in a row with a finished playlist, counting back from today, or from yesterday when
+## Days in a row the playlist was finished, counting back from today, or from yesterday when
 ## today's isn't done yet (so the streak doesn't look broken in the morning).
-func playlist_streak() -> int:
-	var days := _playlist_days()
+func playlist_streak(id: String) -> int:
+	var days := _playlist_days(id)
 	var back := 0 if days.has(_local_day(0)) else 1
 	var streak := 0
 	while days.has(_local_day(back + streak)):
@@ -97,9 +106,9 @@ func playlist_streak() -> int:
 	return streak
 
 
-func _playlist_days() -> Dictionary:
+func _playlist_days(id: String) -> Dictionary:
 	var days := {}
-	for entry: Dictionary in data["playlist"]:
+	for entry: Dictionary in playlist_history(id):
 		days[str(entry.get("date", "")).substr(0, 10)] = true
 	return days
 

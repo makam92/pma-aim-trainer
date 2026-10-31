@@ -1,6 +1,6 @@
 extends Control
-## Pause overlay. Game time stands still while it's open. In the daily playlist a sheet along the
-## right edge shows the whole playlist, and any round in it can be jumped to.
+## Pause overlay. Game time stands still while it's open. In a playlist a sheet along the right
+## edge shows the whole playlist, and any round in it can be jumped to.
 
 signal resume_requested
 signal restart_requested
@@ -15,6 +15,7 @@ const SHEET_WIDTH := 500.0
 var _skip_button: Button
 var _menu_button: Button
 var _sheet: PanelContainer
+var _sheet_title: Label
 var _sheet_progress: Label
 var _sheet_rows: VBoxContainer
 
@@ -48,16 +49,17 @@ func _ready() -> void:
 	set_playlist(false)
 
 
-## In the daily playlist an exercise can be skipped, and leaving ends the whole playlist.
+## In a playlist an exercise can be skipped, and leaving ends the whole playlist.
 func set_playlist(active: bool) -> void:
 	_skip_button.visible = active
 	_menu_button.text = "Avsluta passet" if active else "Till menyn"
 	_sheet.visible = active
 
 
-## Fills the sheet: each exercise in the playlist with a button per round, showing the result of
-## rounds already played (`runs`: step → {"score", ...}) and marking the current one.
-func show_playlist(steps: Array, current: int, runs: Dictionary, titles: Dictionary) -> void:
+## Fills the sheet: each exercise in the playlist `title` with a button per round, showing the result
+## of rounds already played (`runs`: step → {"score", ...}) and marking the current one.
+func show_playlist(title: String, steps: Array, current: int, runs: Dictionary, titles: Dictionary) -> void:
+	_sheet_title.text = title.to_upper()
 	_sheet_progress.text = "Runda %d av %d" % [current + 1, steps.size()]
 	UI.clear(_sheet_rows)
 	var chips: HBoxContainer = null
@@ -99,7 +101,8 @@ func _build_sheet() -> void:
 	add_child(_sheet)
 	var col := UI.vbox(10)
 	_sheet.add_child(col)
-	col.add_child(UI.label("DAGENS PASS", 22, UI.ACCENT, true))
+	_sheet_title = UI.label("", 22, UI.ACCENT, true)
+	col.add_child(_sheet_title)
 	_sheet_progress = UI.label("", 16, UI.TEXT, true)
 	col.add_child(_sheet_progress)
 	var help := UI.label("Klicka på en runda för att hoppa dit, framåt eller bakåt. Gröna rundor är klara; kör du om en ersätts resultatet.", 14, UI.DIM)

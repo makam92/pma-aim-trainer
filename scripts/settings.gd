@@ -39,7 +39,7 @@ const SAVED := [
 	"punch_armor", "punch_range", "punch_zone",
 	"timing_speed", "timing_dist", "timing_door", "timing_move",
 	"saim_target", "saim_range", "saim_speed",
-	"playlist",
+	"playlist", "playlists", "playlist_selected",
 ]
 
 var sensitivity := 1.0
@@ -104,6 +104,11 @@ var saim_range := 1
 var saim_speed := 3
 ## Your own daily playlist as [mode id, rounds] pairs in play order; empty means the standard one.
 var playlist: Array = []
+## Your own playlists besides the daily one (a short warmup, say), oldest first:
+## {"id", "name", "entries"} with entries like `playlist`.
+var playlists: Array = []
+## The playlist picked in the menu: Defs.DAILY_PLAYLIST or the id of one of your own.
+var playlist_selected := Defs.DAILY_PLAYLIST
 
 ## The screenshot tour (--tour=DIR) and the self-test (--selftest) never write settings.
 var dev_mode := false
@@ -181,19 +186,101 @@ func view_stretch(window: Vector2) -> Vector2:
 	return s if stretched else Vector2.ONE * minf(s.x, s.y)
 
 
-## The daily playlist with every mode exactly once, in play order: [[mode id, rounds], ...].
-## Modes missing from your own list (new ones, say) come last with 0 rounds.
-func playlist_entries() -> Array:
+## A playlist with every mode exactly once, in play order: [[mode id, rounds], ...]. Modes missing
+## from its list (new ones, say) come last with 0 rounds; an empty daily list is the standard one.
+func playlist_entries(id: String = Defs.DAILY_PLAYLIST) -> Array:
+	var daily := id == Defs.DAILY_PLAYLIST
+	var source: Variant = playlist if daily else _own_playlist(id).get("entries", [])
+	if not source is Array:
+		source = []
 	var entries: Array = []
 	var seen := {}
-	for entry: Variant in playlist:
+	for entry: Variant in source:
 		if entry is Array and entry.size() == 2 and Defs.PLAYLIST.has(entry[0]) and not seen.has(entry[0]):
 			entries.append([str(entry[0]), clampi(int(entry[1]), 0, Defs.PLAYLIST_MAX_REPS)])
 			seen[entry[0]] = true
-	for id: String in Defs.PLAYLIST:
-		if not seen.has(id):
-			entries.append([id, Defs.PLAYLIST_REPS if playlist.is_empty() else 0])
+	for mode: String in Defs.PLAYLIST:
+		if not seen.has(mode):
+			entries.append([mode, Defs.PLAYLIST_REPS if daily and source.is_empty() else 0])
 	return entries
+
+
+## Saves a playlist's rounds and order, given like playlist_entries() returns them.
+func set_playlist_entries(id: String, entries: Array) -> void:
+	if id == Defs.DAILY_PLAYLIST:
+		update("playlist", entries)
+		return
+	var own := playlists.duplicate(true)
+	for p: Variant in own:
+		if p is Dictionary and p.get("id") == id:
+			p["entries"] = entries
+	update("playlists", own)
+
+
+## The daily playlist's id first, then your own in the order you made them.
+func playlist_ids() -> Array[String]:
+	var ids: Array[String] = [Defs.DAILY_PLAYLIST]
+	for p: Variant in playlists:
+		if p is Dictionary and p.has("id"):
+			ids.append(str(p["id"]))
+	return ids
+
+
+func playlist_name(id: String) -> String:
+	if id == Defs.DAILY_PLAYLIST:
+		return "Dagens pass"
+	var title := str(_own_playlist(id).get("name", "")).strip_edges()
+	return title if title != "" else "Eget pass"
+
+
+## The playlist picked in the menu, or the daily one when that one is gone.
+func selected_playlist() -> String:
+	return playlist_selected if playlist_ids().has(playlist_selected) else Defs.DAILY_PLAYLIST
+
+
+## Makes a new playlist of your own, with no rounds yet, and picks it. Returns its id, or "" when
+## there's no room for another.
+func add_playlist() -> String:
+	if playlists.size() >= Defs.MAX_OWN_PLAYLISTS:
+		return ""
+	# Ids are never reused, so a new playlist never takes over a removed one's history.
+	var stamp := int(Time.get_unix_time_from_system() * 1000.0)
+	while playlist_ids().has("own%d" % stamp):
+		stamp += 1
+	var id := "own%d" % stamp
+	var names := playlist_ids().map(func(other: String) -> String: return playlist_name(other))
+	var title := "Eget pass"
+	var n := 1
+	while names.has(title):
+		n += 1
+		title = "Eget pass %d" % n
+	var own := playlists.duplicate(true)
+	own.append({"id": id, "name": title, "entries": []})
+	playlists = own
+	update("playlist_selected", id)
+	return id
+
+
+## Stores the name as typed; playlist_name() trims it and stands in for an empty one.
+func rename_playlist(id: String, title: String) -> void:
+	var own := playlists.duplicate(true)
+	for p: Variant in own:
+		if p is Dictionary and p.get("id") == id:
+			p["name"] = title.left(Defs.PLAYLIST_NAME_MAX)
+	update("playlists", own)
+
+
+## Removes one of your own playlists; its finished runs stay in the statistics.
+func remove_playlist(id: String) -> void:
+	playlists = playlists.filter(func(p: Variant) -> bool: return not (p is Dictionary and p.get("id") == id))
+	update("playlist_selected", selected_playlist())
+
+
+func _own_playlist(id: String) -> Dictionary:
+	for p: Variant in playlists:
+		if p is Dictionary and p.get("id") == id:
+			return p
+	return {}
 
 
 func crosshair_rgb() -> Color:

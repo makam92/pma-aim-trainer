@@ -21,6 +21,11 @@ const RUN_SECONDS := 60.0
 const PLAYLIST := ["grid", "flick", "micro", "track", "confirm", "tconfirm", "punch", "timing", "strafeaim", "strafe"]
 const PLAYLIST_REPS := 3
 const PLAYLIST_MAX_REPS := 5
+## The daily playlist's id. Your own playlists (Settings.playlists) get ids of their own, never reused.
+const DAILY_PLAYLIST := "daily"
+## How many playlists of your own there's room for besides the daily one, and their longest name.
+const MAX_OWN_PLAYLISTS := 4
+const PLAYLIST_NAME_MAX := 18
 ## Targets never come lower than this above the floor (meters), however far away they are.
 const MIN_TARGET_HEIGHT := 0.5
 ## Target distances in CS2 units for Flicks and Target Confirmation. Targets are real head size,
