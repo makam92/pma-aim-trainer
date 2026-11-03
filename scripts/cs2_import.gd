@@ -34,6 +34,7 @@ var _cli := ""
 var _vpk := ""
 var _gameinfo := ""
 var _data := ""
+var _unreadable := false     # a file was in a format this Source 2 Viewer doesn't know yet
 
 
 ## Where Source 2 Viewer's command line tool is: next to the installed game, or where the project
@@ -108,6 +109,7 @@ func _run() -> void:
 	for n in range(1, 5):
 		steps.append(["AK-ljud %d" % n, "sounds/weapons/ak47/ak47_0%d.vsnd_c" % n, "sounds", ""])
 	var failed: Array[String] = []
+	_unreadable = false
 	for i in steps.size():
 		var step: Array = steps[i]
 		_report.call_deferred(i, steps.size() + 1, step[0])
@@ -118,6 +120,8 @@ func _run() -> void:
 		_shrink_textures(_data.path_join(folder), TEXTURE_MAX[folder])
 	var message := "Klart: spelarmodeller, hitboxar, vapen, AK:n i första person och AK-ljud är inlästa från din CS2-installation." \
 		if failed.is_empty() else "Klart, men det här gick inte att läsa: %s." % ", ".join(failed)
+	if _unreadable:
+		message += " CS2 har nog uppdaterats till ett filformat som Source 2 Viewer inte kan läsa än. Installera den senaste versionen av PMA Aim Trainer och importera igen."
 	_done.call_deferred(failed.is_empty(), message)
 
 
@@ -127,8 +131,9 @@ func _export(path: String, kind: String, animations: String) -> bool:
 	var args := PackedStringArray(["-i", _win(_vpk), "--game", _win(_gameinfo), "-f", path])
 	if kind == "hitboxes":
 		args.append("-a")
-		var dump := _run_cli(args)
-		var hitboxes := _parse_hitboxes(dump[1])
+		var dump: String = _run_cli(args)[1]
+		_check_readable(dump)
+		var hitboxes := _parse_hitboxes(dump)
 		if hitboxes.is_empty():
 			return false
 		var target := _data.path_join("models").path_join(path.trim_suffix(".vmdl_c") + ".hitboxes.json")
@@ -144,7 +149,16 @@ func _export(path: String, kind: String, animations: String) -> bool:
 	if animations != "":
 		args.append_array(["--gltf_export_animations", "--gltf_animation_list", animations])
 	# It reports harmless warnings on stderr; a file written is what counts.
-	return (_run_cli(args)[1] as String).contains("Dump written")
+	var output: String = _run_cli(args)[1]
+	_check_readable(output)
+	return output.contains("Dump written")
+
+
+## Source 2 Viewer stops with this when a CS2 update uses a file format it doesn't know yet (CS2's
+## player models after its autumn 2026 update needed Source 2 Viewer 20.1, say).
+func _check_readable(output: String) -> void:
+	if output.contains("UnexpectedMagicException") or output.contains("Unknown KVType"):
+		_unreadable = true
 
 
 ## Runs the command line tool from the data folder, so anything it writes beside itself (like a log

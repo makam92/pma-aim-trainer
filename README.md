@@ -85,7 +85,9 @@ CS2-installation (den hittas via Steam). Det tar under en minut. Filerna hamnar 
 Importera igen efter CS2-uppdateringar. Utan CS2-filer används de inbyggda figurerna.
 
 Importen använder Source 2 Viewers kommandoradsverktyg (öppen källkod, MIT), som följer med
-installern. Från projektet tas det från `%LOCALAPPDATA%\Programs\Source2Viewer`. Utan fönster:
+installern. Från projektet tas det från `%LOCALAPPDATA%\Programs\Source2Viewer`; det måste vara
+version 20.1 eller senare, äldre kan inte läsa spelarmodellerna i dagens CS2. Går en import inte att
+läsa efter en CS2-uppdatering säger spelet det, och då behövs en nyare Source 2 Viewer. Utan fönster:
 
 ```
 "%LOCALAPPDATA%\Programs\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path . -- --import-cs2
