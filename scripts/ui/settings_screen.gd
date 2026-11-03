@@ -1,16 +1,25 @@
 extends Control
-## Sensitivity, crosshair, drills and bots, CS2 files, graphics and sound, and the weapon.
+## Sensitivity, crosshair (also from CS2), drills and bots, CS2 files, graphics and sound, and the weapon.
 
 signal back_requested
 
 const UI = preload("res://scripts/ui/ui_kit.gd")
 const Crosshair = preload("res://scripts/ui/crosshair.gd")
+const CrosshairImport = preload("res://scripts/crosshair_import.gd")
+const CROSSHAIR_HELP := "Hämta ditt crosshair från din CS2-config, eller klistra in en crosshair-kod (CS…) från CS2 eller en kompis."
 
 var _info: Label
 var _models_info: Label
 var _import_button: Button
 var _import_bar: ProgressBar
 var _import_status: Label
+var _code: LineEdit
+var _crosshair_status: Label
+var _crosshair_info: Label
+var _color: OptionButton
+var _outline: OptionButton
+var _sliders := {}      # setting → [slider, its value], so an imported crosshair shows in them
+var _checks := {}       # setting → checkbox
 
 
 func _ready() -> void:
@@ -20,7 +29,7 @@ func _ready() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(1000, 0)
+	panel.custom_minimum_size = Vector2(1480, 0)
 	center.add_child(panel)
 	var col := UI.vbox(18)
 	panel.add_child(col)
@@ -29,11 +38,11 @@ func _ready() -> void:
 	var columns := UI.hbox(40)
 	col.add_child(columns)
 	var left := UI.vbox(12)
-	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	columns.add_child(left)
+	var middle := UI.vbox(12)
 	var right := UI.vbox(12)
-	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	columns.add_child(right)
+	for column: VBoxContainer in [left, middle, right]:
+		column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		columns.add_child(column)
 
 	left.add_child(_section("Sikte"))
 	var aim := _grid()
@@ -47,16 +56,44 @@ func _ready() -> void:
 	_info.custom_minimum_size = Vector2(440, 0)
 	left.add_child(_info)
 
-	left.add_child(_section("Crosshair"))
+	# The crosshair: a preview, taking one from CS2, and CS2's own settings for it.
+	middle.add_child(_section("Crosshair"))
+	var preview := Crosshair.new()
+	preview.preview = true
+	preview.custom_minimum_size = Vector2(0, 150)
+	middle.add_child(preview)
+	var from_cs2 := UI.button("Hämta från CS2", func() -> void: _take_crosshair(CrosshairImport.from_cs2(), "Hämtat från CS2"))
+	from_cs2.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	middle.add_child(from_cs2)
+	var paste := UI.hbox(10)
+	_code = LineEdit.new()
+	_code.placeholder_text = "Eller klistra in en crosshair-kod: CS…"
+	_code.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_code.text_submitted.connect(func(text: String) -> void: _take_crosshair(CrosshairImport.from_code(text), "Koden är inläst"))
+	paste.add_child(_code)
+	paste.add_child(UI.button("Använd", func() -> void: _take_crosshair(CrosshairImport.from_code(_code.text), "Koden är inläst")))
+	middle.add_child(paste)
+	_crosshair_status = UI.label(CROSSHAIR_HELP, 14, UI.DIM)
+	_crosshair_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_crosshair_status.custom_minimum_size = Vector2(440, 0)
+	middle.add_child(_crosshair_status)
 	var ch := _grid()
-	left.add_child(ch)
-	var colors := Settings.CROSSHAIR_COLORS.map(func(c: Dictionary) -> String: return c["name"])
-	_row(ch, "Färg", UI.options(colors, Settings.crosshair_color, func(i: int) -> void: Settings.update("crosshair_color", i)))
-	_row(ch, "Längd", _slider(1, 20, Settings.crosshair_length, "crosshair_length"))
-	_row(ch, "Mellanrum", _slider(0, 15, Settings.crosshair_gap, "crosshair_gap"))
-	_row(ch, "Tjocklek", _slider(1, 6, Settings.crosshair_thickness, "crosshair_thickness"))
-	_row(ch, "Kontur", _check(Settings.crosshair_outline, "crosshair_outline"))
+	middle.add_child(ch)
+	var colors := Settings.CROSSHAIR_COLORS.map(func(c: Dictionary) -> String: return c["name"]) + ["Egen"]
+	_color = UI.options(colors, 0, _pick_color)
+	_row(ch, "Färg", _color)
+	_row(ch, "Längd", _slider(0, 30, Settings.crosshair_length, "crosshair_length"))
+	_row(ch, "Mellanrum", _slider(-10, 30, Settings.crosshair_gap, "crosshair_gap"))
+	_row(ch, "Tjocklek", _slider(1, 12, Settings.crosshair_thickness, "crosshair_thickness"))
+	_outline = UI.options(["Av", "Hel", "Halv (uppe och vänster)"], Settings.crosshair_outline_mode,
+		func(i: int) -> void: Settings.update("crosshair_outline_mode", i))
+	_row(ch, "Kontur", _outline)
 	_row(ch, "Prick i mitten", _check(Settings.crosshair_dot, "crosshair_dot"))
+	_row(ch, "T-stil", _check(Settings.crosshair_t, "crosshair_t"))
+	_crosshair_info = UI.label("", 14, UI.DIM)
+	_crosshair_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_crosshair_info.custom_minimum_size = Vector2(440, 0)
+	middle.add_child(_crosshair_info)
 
 	left.add_child(_section("Övningar"))
 	var drills := _grid()
@@ -95,12 +132,6 @@ func _ready() -> void:
 	Importer.progress.connect(_on_import_progress)
 	Importer.finished.connect(_on_import_finished)
 
-	right.add_child(_section("Förhandsvisning"))
-	var preview := Crosshair.new()
-	preview.preview = true
-	preview.custom_minimum_size = Vector2(0, 150)
-	right.add_child(preview)
-
 	right.add_child(_section("Grafik och ljud"))
 	var gfx := _grid()
 	right.add_child(gfx)
@@ -136,8 +167,58 @@ func _ready() -> void:
 
 	Settings.changed.connect(_refresh_info)
 	_refresh_info()
+	Settings.changed.connect(_refresh_crosshair)
+	_refresh_crosshair()
 	Agents.loaded.connect(_refresh_models)
 	_refresh_models()
+
+
+## Shows the crosshair settings as they are, also after an import changed them all at once.
+func _refresh_crosshair() -> void:
+	for key: String in ["crosshair_length", "crosshair_gap", "crosshair_thickness"]:
+		var value: int = Settings.get(key)
+		(_sliders[key][0] as HSlider).set_value_no_signal(value)
+		(_sliders[key][1] as Label).text = str(value)
+	for key: String in ["crosshair_dot", "crosshair_t"]:
+		(_checks[key] as CheckBox).set_pressed_no_signal(Settings.get(key))
+	_outline.select(Settings.crosshair_outline_mode)
+	var own := _color.item_count - 1
+	_color.set_item_text(own, "Egen  #" + Settings.crosshair_rgba.to_html(false).to_upper())
+	var preset := _preset_of(Settings.crosshair_rgba)
+	_color.select(preset if preset >= 0 else own)
+	var height := Settings.crosshair_screen_height
+	_crosshair_info.text = ("Storlekarna är hela pixlar vid %d px skärmhöjd, som i CS2, och skalas till upplösningen du kör i." % height) \
+		if height > 0 else "Storlekarna är hela pixlar i upplösningen du kör i, som i CS2."
+
+
+## Uses what crosshair_import.gd read, or says what went wrong.
+func _take_crosshair(result: Dictionary, done: String) -> void:
+	if result.has("error"):
+		_crosshair_status.text = result["error"]
+		_crosshair_status.add_theme_color_override("font_color", UI.BAD)
+		return
+	Settings.set_crosshair(result["crosshair"])
+	_code.text = ""
+	_crosshair_status.text = "%s: %s." % [done, CrosshairImport.describe(result["crosshair"])]
+	_crosshair_status.add_theme_color_override("font_color", UI.GOOD)
+
+
+## A colour from the list keeps the crosshair's opacity; "Egen" (the last) is whatever was imported.
+func _pick_color(index: int) -> void:
+	if index >= Settings.CROSSHAIR_COLORS.size():
+		return
+	var color: Color = Settings.CROSSHAIR_COLORS[index]["color"]
+	color.a = Settings.crosshair_rgba.a
+	Settings.update("crosshair_rgba", color)
+
+
+## Which colour in the list this is, ignoring opacity, or -1.
+static func _preset_of(color: Color) -> int:
+	for i in Settings.CROSSHAIR_COLORS.size():
+		var c: Color = Settings.CROSSHAIR_COLORS[i]["color"]
+		if Color(c, color.a).is_equal_approx(color):
+			return i
+	return -1
 
 
 func _refresh_models() -> void:
@@ -225,6 +306,7 @@ func _slider(min_value: int, max_value: int, value: int, key: String) -> Control
 	s.value_changed.connect(_on_slider.bind(key, l))
 	row.add_child(s)
 	row.add_child(l)
+	_sliders[key] = [s, l]
 	return row
 
 
@@ -241,4 +323,5 @@ func _check(value: bool, key: String) -> CheckBox:
 	c.button_pressed = value
 	c.focus_mode = Control.FOCUS_NONE
 	c.toggled.connect(func(on: bool) -> void: Settings.update(key, on))
+	_checks[key] = c
 	return c

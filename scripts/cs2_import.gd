@@ -50,16 +50,19 @@ static func find_cli() -> String:
 	return ""
 
 
-## The csgo folder of CS2 in any Steam library, or "".
-static func find_cs2() -> String:
+## Where Steam is installed, from the registry, else its usual folder.
+static func find_steam() -> String:
 	var output := []
 	OS.execute("reg", ["query", "HKCU\\Software\\Valve\\Steam", "/v", "SteamPath"], output)
-	var steam := ""
 	for line: String in "\n".join(output).split("\n"):
 		if line.contains("SteamPath") and line.contains("REG_SZ"):
-			steam = line.get_slice("REG_SZ", 1).strip_edges()
-	if steam == "":
-		steam = "C:/Program Files (x86)/Steam"
+			return line.get_slice("REG_SZ", 1).strip_edges()
+	return "C:/Program Files (x86)/Steam"
+
+
+## The csgo folder of CS2 in any Steam library, or "".
+static func find_cs2() -> String:
+	var steam := find_steam()
 	var libraries: Array[String] = [steam]
 	var vdf := FileAccess.get_file_as_string(steam.path_join("steamapps/libraryfolders.vdf"))
 	var regex := RegEx.create_from_string("\"path\"\\s+\"([^\"]+)\"")

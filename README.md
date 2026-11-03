@@ -100,6 +100,18 @@ Spelet och AK:n renderas då i den upplösningen med CS2:s FOV för bildformatet
 till skärmen, som när grafikkortet skalar CS2. Hårkors, HUD och menyer ritas i skärmens egen
 upplösning: hårkorset sträcks ut som i CS2 men läggs på hela pixlar, lika på båda sidor.
 
+## Crosshair från CS2
+
+Under **Inställningar → Crosshair** hämtar **Hämta från CS2** ditt crosshair ur CS2-configen för det
+Steam-konto som spelade CS2 senast, och i fältet under kan du klistra in en crosshair-kod (`CS…`) från
+CS2 eller en kompis. Crosshairet fungerar som CS2:s sedan uppdateringen i september 2026: längd,
+mellanrum och tjocklek i hela pixlar vid den skärmhöjd det gjordes för, skalat till upplösningen du
+kör i, med egen färg och opacitet, kontur av, hel eller halv (uppe och vänster), prick och T-stil.
+Pixlarna läggs som i CS2, uppmätt i CS2-skärmdumpar: mellanrummet räknas från mitten, och udda
+tjocklekar centreras på pixeln strax ovanför och till vänster om mitten. Dynamiska och runda stilar
+ritas som Static Cross. Gamla koder (`CSGO-…`) tar CS2 inte längre emot, och inte heller spelet.
+Kodformatet följer [csgo-sharecode](https://github.com/akiver/csgo-sharecode) (MIT).
+
 ## Installer
 
 `tools\build_installer.ps1` exporterar spelet till en fristående .exe och bygger

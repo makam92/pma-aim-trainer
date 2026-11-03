@@ -25,8 +25,8 @@ const RESOLUTIONS := [
 const UI_BASE := Vector2(1920.0, 1080.0)
 const SAVED := [
 	"sensitivity", "dpi",
-	"crosshair_color", "crosshair_length", "crosshair_gap", "crosshair_thickness",
-	"crosshair_outline", "crosshair_dot",
+	"crosshair_rgba", "crosshair_length", "crosshair_gap", "crosshair_thickness", "crosshair_screen_height",
+	"crosshair_outline_mode", "crosshair_outline_rgba", "crosshair_dot", "crosshair_t", "crosshair_style",
 	"volume", "fullscreen", "vsync", "fps_cap", "room_theme", "use_cs2_models", "resolution", "stretched",
 	"bot_crouch", "viewmodel", "ak_sound", "viewmodel_fov", "impacts", "ak_recoil", "countdown", "hit_times",
 	"grid_target", "grid_range",
@@ -44,12 +44,20 @@ const SAVED := [
 
 var sensitivity := 1.0
 var dpi := 800
-var crosshair_color := 0
+## The crosshair the way CS2 has it since its September 2026 update: length, gap and thickness in
+## whole pixels at crosshair_screen_height (CS2's cl_crosshair_screen_height; 0 means the resolution
+## the game is drawn at), colours with alpha, an outline that's off (0), all round (1) or only on the
+## top and left edges (2), and the T style. crosshair_style is CS2's cl_crosshairstyle.
+var crosshair_rgba := Color(0.25, 1.0, 0.4)
 var crosshair_length := 5
 var crosshair_gap := 3
 var crosshair_thickness := 2
-var crosshair_outline := true
+var crosshair_screen_height := 0
+var crosshair_outline_mode := 1
+var crosshair_outline_rgba := Color.BLACK
 var crosshair_dot := false
+var crosshair_t := false
+var crosshair_style := 4
 var volume := 0.6
 var fullscreen := true
 var vsync := false
@@ -283,8 +291,37 @@ func _own_playlist(id: String) -> Dictionary:
 	return {}
 
 
-func crosshair_rgb() -> Color:
-	return CROSSHAIR_COLORS[crosshair_color]["color"]
+## The crosshair as set_crosshair() takes it.
+func crosshair_values() -> Dictionary:
+	return {"length": crosshair_length, "gap": crosshair_gap, "thickness": crosshair_thickness,
+		"screen_height": crosshair_screen_height, "style": crosshair_style, "dot": crosshair_dot, "t": crosshair_t,
+		"rgba": crosshair_rgba, "outline_mode": crosshair_outline_mode, "outline_rgba": crosshair_outline_rgba}
+
+
+## Takes a crosshair as crosshair_import.gd reads it out of CS2.
+func set_crosshair(c: Dictionary) -> void:
+	crosshair_length = c["length"]
+	crosshair_gap = c["gap"]
+	crosshair_thickness = c["thickness"]
+	crosshair_screen_height = c["screen_height"]
+	crosshair_style = c["style"]
+	crosshair_dot = c["dot"]
+	crosshair_t = c["t"]
+	crosshair_rgba = c["rgba"]
+	crosshair_outline_mode = c["outline_mode"]
+	crosshair_outline_rgba = c["outline_rgba"]
+	save()
+	apply()
+
+
+## How much the crosshair's pixel sizes are scaled where the game is drawn, like CS2 scales them from
+## cl_crosshair_screen_height to your resolution. `window_height` stands in for the game's own
+## resolution when it's drawn at the screen's.
+func crosshair_scale(window_height: float) -> float:
+	if crosshair_screen_height <= 0:
+		return 1.0
+	var height := float(render_size().y) if render_size() != Vector2i.ZERO else window_height
+	return height / crosshair_screen_height
 
 
 func edpi() -> float:
@@ -309,3 +346,9 @@ func _load() -> void:
 		return
 	for key: String in SAVED:
 		set(key, cfg.get_value("settings", key, get(key)))
+	# The crosshair used to take a colour from the list and an outline on or off; its sizes were
+	# already pixels where the game is drawn.
+	if cfg.has_section_key("settings", "crosshair_color") and not cfg.has_section_key("settings", "crosshair_rgba"):
+		var old: int = cfg.get_value("settings", "crosshair_color", 0)
+		crosshair_rgba = CROSSHAIR_COLORS[clampi(old, 0, CROSSHAIR_COLORS.size() - 1)]["color"]
+		crosshair_outline_mode = 1 if cfg.get_value("settings", "crosshair_outline", true) else 0

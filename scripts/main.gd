@@ -7,6 +7,7 @@ const World = preload("res://scripts/world.gd")
 const Player = preload("res://scripts/player.gd")
 const Hud = preload("res://scripts/ui/hud.gd")
 const Crosshair = preload("res://scripts/ui/crosshair.gd")
+const CrosshairImport = preload("res://scripts/crosshair_import.gd")
 const Menu = preload("res://scripts/ui/menu.gd")
 const SettingsScreen = preload("res://scripts/ui/settings_screen.gd")
 const StatsScreen = preload("res://scripts/ui/stats_screen.gd")
@@ -675,11 +676,61 @@ func _self_test() -> void:
 		failures += 1
 	# A check that stops on a script error returns nothing, and counts as failed.
 	for check: Callable in [_countdown_check, _flick_check, _micro_check, _punch_check, _strafeaim_check,
-			_tconfirm_lives_check, _tconfirm_mixed_check, _timing_check, _timing_strafe_check, _playlist_check]:
+			_tconfirm_lives_check, _tconfirm_mixed_check, _timing_check, _timing_strafe_check, _playlist_check,
+			_crosshair_code_check]:
 		var result: Variant = await check.call()
 		failures += 1 if result == null else int(result)
 	print("OK" if failures == 0 else "FEL: %d" % failures)
 	get_tree().quit(failures)
+
+
+## Crosshairs from CS2: share codes decode to what CS2 itself applies (the codes and values are
+## csgo-sharecode's tests, checked there against CS2's ConVars), bad and old codes are refused, a CS2
+## config is read, and the crosshair lands on the pixels CS2 draws it on, as measured in CS2
+## screenshots at 1280x1024 and 1920x1080.
+func _crosshair_code_check() -> int:
+	var codes := [
+		["CSvbPubOq37zTGqtsPTP5QTrp5CB4xFXiKRLfzJsm49ZRe", {"style": 2, "dot": true, "t": false, "outline_mode": 0,
+			"rgba": Color8(255, 0, 0, 255), "outline_rgba": Color8(0, 0, 0, 255), "gap": 0, "length": 5, "thickness": 1,
+			"screen_height": 768}],
+		["CSAB6Oby2JUDOrBRy4jRcsR6JOQdhbszKF9GuKQGhKVwAc", {"style": 9, "dot": false, "t": true, "outline_mode": 2,
+			"rgba": Color8(10, 20, 30, 200), "outline_rgba": Color8(40, 50, 60, 128), "gap": -7, "length": 255,
+			"thickness": 12, "screen_height": 1440}],
+		# Every field at the most its bits hold: CS2 clamps them, the screen height up from 100.
+		["CS7uw3wMkJBJ4rMDLEaYbyfTJFFPvkLAhOmBFi8zOM6H2d", {"style": 9, "outline_mode": 2, "rgba": Color8(1, 2, 3, 4),
+			"outline_rgba": Color8(5, 6, 7, 8), "gap": -3840, "length": 9, "thickness": 32, "screen_height": 240}],
+		["CSDfPcMpj4e9NRxx6SGiVoFCHzYRYGmb34WHpbYHy6E6id", {"gap": 3840}],
+	]
+	var decoded := 0
+	for case: Array in codes:
+		var got: Dictionary = CrosshairImport.from_code(case[0]).get("crosshair", {})
+		var want: Dictionary = case[1]
+		var same := not got.is_empty()
+		for key: String in want:
+			same = same and got.get(key) == want[key]
+		decoded += int(same)
+	# A wrong checksum, a screen height of 0, version 2, a code from before CS2's new format, and nonsense.
+	var refused := 0
+	for code: String in ["CSkSCHQKunGr2yPsJr2U3RTd8ycMA2pEs9jWnxK5KjMmWL", "CSoQhciXBHZUKAbfexZBeMWFKxkrXL5MLumDLj3JYW4snP",
+			"CSuZhVyU8icUwjTjopBSVi6ctEbq5GiOXJBRdC6LNLKaFL", "CSGO-L9spZ-ihuov-cyhtE-kxbqa-FkBAA", "CS2 är kul"]:
+		refused += int(CrosshairImport.from_code(code).has("error"))
+	var config: Dictionary = CrosshairImport.parse_config("\t\t\"cl_crosshair_drawoutline\"\t\t\"0\"\n\t\t\"cl_crosshair_gap\"\t\t\"2\"\n"
+		+ "\t\t\"cl_crosshair_length\"\t\t\"2\"\n\t\t\"cl_crosshair_screen_height\"\t\t\"1024\"\n\t\t\"cl_crosshair_t\"\t\t\"false\"\n"
+		+ "\t\t\"cl_crosshair_thickness\"\t\t\"3\"\n\t\t\"cl_crosshaircolor_a\"\t\t\"255\"\n\t\t\"cl_crosshaircolor_b\"\t\t\"237\"\n"
+		+ "\t\t\"cl_crosshaircolor_g\"\t\t\"221\"\n\t\t\"cl_crosshaircolor_r\"\t\t\"119\"\n\t\t\"cl_crosshairdot\"\t\t\"false\"\n"
+		+ "\t\t\"cl_crosshairstyle\"\t\t\"4\"\n").get("crosshair", {})
+	var config_read: bool = config == {"length": 2, "gap": 2, "thickness": 3, "screen_height": 1024, "style": 4, "dot": false,
+		"t": false, "rgba": Color8(119, 221, 237, 255), "outline_mode": 0, "outline_rgba": Color8(0, 0, 0, 255)}
+	var old_refused := CrosshairImport.parse_config("\t\t\"cl_crosshairsize\"\t\t\"0.900000\"\n").has("error")
+	# CS2 at 1280x1024: thickness 1, gap 1, length 4 on pixel 639 (and row 511), and thickness 2,
+	# gap 3, length 5; at 1920x1080 thickness 2, gap 1, length 2.
+	var placed: bool = Crosshair._spans(1280.0, 1.0, 1.0, 4.0) == {"line": Vector2(639, 640), "before": Vector2(634, 638), "after": Vector2(641, 645)} \
+		and Crosshair._spans(1024.0, 1.0, 1.0, 4.0) == {"line": Vector2(511, 512), "before": Vector2(506, 510), "after": Vector2(513, 517)} \
+		and Crosshair._spans(1280.0, 2.0, 3.0, 5.0) == {"line": Vector2(639, 641), "before": Vector2(632, 637), "after": Vector2(643, 648)} \
+		and Crosshair._spans(1920.0, 2.0, 1.0, 2.0) == {"line": Vector2(959, 961), "before": Vector2(957, 959), "after": Vector2(961, 963)}
+	print("[självtest] crosshair från CS2: koder %d/%d rätt, dåliga koder nekade %d/5, configen läst: %s, gammal config nekad: %s, pixlarna som i CS2: %s" % [
+		decoded, codes.size(), refused, "ja" if config_read else "NEJ", "ja" if old_refused else "NEJ", "ja" if placed else "NEJ"])
+	return int(decoded != codes.size()) + int(refused != 5) + int(not config_read) + int(not old_refused) + int(not placed)
 
 
 ## A playlist of your own: a new one gets a free name and is picked in the menu, runs only its own
@@ -1013,6 +1064,13 @@ func _run_tour() -> void:
 	await _snap(dir, "01_menu")
 	_show(settings_screen)
 	await _snap(dir, "02_settings")
+	# Your crosshair from CS2, as "Hämta från CS2" reads it out of your CS2 config.
+	var crosshair_before := Settings.crosshair_values()
+	var from_cs2 := CrosshairImport.from_cs2()
+	print("[hårkors] från CS2: %s" % (CrosshairImport.describe(from_cs2["crosshair"]) if from_cs2.has("crosshair") else from_cs2["error"]))
+	settings_screen.call("_take_crosshair", from_cs2, "Hämtat från CS2")
+	await _snap(dir, "02_settings_crosshair_cs2")
+	Settings.set_crosshair(crosshair_before)
 	_fake_history()
 	_show(stats_screen)
 	await _snap(dir, "03_stats")
@@ -1315,11 +1373,14 @@ func _run_tour() -> void:
 ## The crosshair as it shows on screen, at the screen's own resolution and at 1280x1024 stretched,
 ## for a few looks: both sides must be the same, around the middle of the screen.
 func _crosshair_check(dir: String) -> void:
-	var saved := [Settings.crosshair_color, Settings.crosshair_length, Settings.crosshair_gap,
-		Settings.crosshair_thickness, Settings.crosshair_outline, Settings.crosshair_dot, Settings.resolution]
-	Settings.crosshair_color = 3   # magenta, which nothing else on screen is
-	Settings.crosshair_outline = false
+	var saved := Settings.crosshair_values()
+	var saved_resolution := Settings.resolution
+	Settings.crosshair_rgba = Settings.CROSSHAIR_COLORS[3]["color"]   # magenta, which nothing else on screen is
+	Settings.crosshair_outline_mode = 0
 	Settings.crosshair_dot = false
+	Settings.crosshair_t = false
+	Settings.crosshair_style = 4
+	Settings.crosshair_screen_height = 0
 	start_mode("grid")
 	hud.visible = false
 	viewmodel.set_active(false)
@@ -1341,14 +1402,8 @@ func _crosshair_check(dir: String) -> void:
 				var crop := image.get_region(Rect2i(middle - Vector2i(16, 12), Vector2i(32, 24)))
 				crop.resize(256, 192, Image.INTERPOLATE_NEAREST)
 				crop.save_png(dir.path_join("27_crosshair_1280x1024.png"))
-	Settings.crosshair_color = saved[0]
-	Settings.crosshair_length = saved[1]
-	Settings.crosshair_gap = saved[2]
-	Settings.crosshair_thickness = saved[3]
-	Settings.crosshair_outline = saved[4]
-	Settings.crosshair_dot = saved[5]
-	Settings.resolution = saved[6]
-	Settings.apply()
+	Settings.resolution = saved_resolution
+	Settings.set_crosshair(saved)
 
 
 ## The crosshair's pixels in a screenshot (magenta): whether they mirror left to right and top to
