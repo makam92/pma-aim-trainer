@@ -143,6 +143,7 @@ func _ready() -> void:
 	menu.playlist_requested.connect(start_playlist)
 	menu.playlist_edit_requested.connect(_edit_playlist)
 	menu.playlist_new_requested.connect(_new_playlist)
+	menu.import_requested.connect(_import_from_menu)
 	menu.settings_requested.connect(func() -> void: _show(settings_screen))
 	menu.stats_requested.connect(func() -> void: _show(stats_screen))
 	menu.quit_requested.connect(func() -> void: get_tree().quit())
@@ -468,6 +469,13 @@ func _edit_playlist(is_new: bool = false) -> void:
 func _new_playlist() -> void:
 	if Settings.add_playlist() != "":
 		_edit_playlist(true)
+
+
+## From the menu's nudge: the CS2 files' tab in the settings, with the import already under way.
+func _import_from_menu() -> void:
+	_show(settings_screen)
+	settings_screen.show_tab("files")
+	Importer.start()
 
 
 ## "Tracking 2/3": the mode of a playlist step and which of its runs it is.
@@ -1062,8 +1070,16 @@ func _run_tour() -> void:
 		get_tree().quit()
 		return
 	await _snap(dir, "01_menu")
+	# Without CS2 files the menu nudges you to read them in, where the sensitivity line was.
+	menu.get("_cs2_hint").visible = true
+	menu.get("_sens_label").visible = false
+	await _snap(dir, "01_menu_no_cs2_files")
+	menu.refresh()
 	_show(settings_screen)
-	await _snap(dir, "02_settings")
+	for tab: Array in SettingsScreen.TABS:
+		settings_screen.show_tab(tab[0])
+		await _snap(dir, "02_settings_" + tab[0])
+	settings_screen.show_tab("aim")
 	# Your crosshair from CS2, as "Hämta från CS2" reads it out of your CS2 config.
 	var crosshair_before := Settings.crosshair_values()
 	var from_cs2 := CrosshairImport.from_cs2()

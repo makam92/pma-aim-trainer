@@ -46,9 +46,9 @@ siktet. Båda går att stänga av under Inställningar → Övningar.
 Målen är CS2-huvuden i verklig storlek (eller klot), på avstånd i CS2-units: Blandat 250–1100 u,
 Nära, Medel eller Långt. Längre bort ser de mindre ut, precis som i spelet.
 
-Gubbarna i Tracking och Tracking Confirmation croucher ibland, som i CS2: oftast när de stannar och
-ibland mitt i ADAD. Crouchade går de i 34 % av maxfarten (85 u/s med kniv) och huvudet sjunker
-17 units. Det går att stänga av under Inställningar → Övningar.
+Under Inställningar → Övningar kan gubbarna i Tracking och Tracking Confirmation croucha ibland,
+som i CS2: oftast när de stannar och ibland mitt i ADAD. Crouchade går de i 34 % av maxfarten
+(85 u/s med kniv) och huvudet sjunker 17 units. Det är av från början, precis som rekyl och spray.
 
 **Dagens pass** kör som standard alla tio lägena tre gånger var (cirka 36 minuter). Med **Ändra**
 väljer du själv hur många rundor av varje övning (0–5) och i vilken ordning. Med **+ Nytt pass** gör

@@ -6,6 +6,8 @@ signal start_requested(mode_id: String)
 signal playlist_requested
 signal playlist_edit_requested
 signal playlist_new_requested
+## Read the CS2 files in, from the nudge shown until they are.
+signal import_requested
 signal settings_requested
 signal stats_requested
 signal quit_requested
@@ -73,6 +75,7 @@ const CARDS := [
 
 var _pb_labels := {}
 var _sens_label: Label
+var _cs2_hint: HBoxContainer
 var _playlist_tabs: HFlowContainer
 var _tab_buttons := {}      # playlist id → its tab
 var _tabs_made_for := ""    # the playlists and names the tabs were made for
@@ -111,6 +114,14 @@ func _ready() -> void:
 	col.add_child(cards)
 
 	var footer := UI.hbox(12)
+	# Until the CS2 files are read in, a nudge to do it takes the sensitivity line's place.
+	_cs2_hint = UI.hbox(14)
+	_cs2_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var hint := UI.label("Hämta CS2:s riktiga gubbar, hitboxar och ljud från din CS2-installation. Det tar under en minut.", 16, UI.ACCENT)
+	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_cs2_hint.add_child(hint)
+	_cs2_hint.add_child(UI.button("Importera från CS2", func() -> void: import_requested.emit(), true))
+	footer.add_child(_cs2_hint)
 	_sens_label = UI.label("", 16, UI.DIM)
 	_sens_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_sens_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -121,6 +132,7 @@ func _ready() -> void:
 	col.add_child(footer)
 
 	Settings.changed.connect(refresh)
+	Agents.loaded.connect(refresh)
 	refresh()
 
 
@@ -128,6 +140,9 @@ func refresh() -> void:
 	_sens_label.text = "Sens %s  ·  %d DPI  ·  eDPI %s  ·  %s cm/360" % [
 		str(snappedf(Settings.sensitivity, 0.001)).replace(".", ","), Settings.dpi,
 		UI.num(Settings.edpi()), UI.dec(Settings.cm_per_360(), 1)]
+	var missing := Agents.is_loaded and not Agents.available()
+	_cs2_hint.visible = missing
+	_sens_label.visible = not missing
 	for id: String in _pb_labels:
 		var best: Variant = Stats.best(id, Defs.variant(id, Settings))
 		_pb_labels[id].text = "Personbästa: " + (UI.main_value(id, best) if best != null else "–")

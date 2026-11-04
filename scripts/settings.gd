@@ -66,8 +66,8 @@ var room_theme := 0
 var use_cs2_models := true
 var resolution := 0
 var stretched := true
-## Whether the bots in Tracking and Tracking Confirmation crouch now and then.
-var bot_crouch := true
+## Whether the bots in Tracking and Tracking Confirmation crouch now and then (off unless turned on).
+var bot_crouch := false
 ## The AK in your hands like CS2's viewmodel (then shots also follow its fire rate), CS2's own AK
 ## sound for shots, and CS2's viewmodel_fov (54-68).
 var viewmodel := true
